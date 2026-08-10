@@ -88,7 +88,8 @@ MAX_CLIENTS=16
 ```sh
 sudo systemctl start routerd     # turn on the access point
 sudo routerd status              # SSID, channel, connected clients
-sudo systemctl restart routerd   # pick up config changes
+sudo systemctl reload routerd    # apply SSID/password/channel/subnet changes
+sudo systemctl restart routerd   # full restart (recreates the AP interface)
 sudo systemctl enable routerd    # start automatically on boot
 sudo systemctl stop routerd      # turn it off (cleans everything up)
 ```

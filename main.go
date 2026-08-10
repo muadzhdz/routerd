@@ -134,7 +134,7 @@ func cleanup(cfg *Config) {
 	_ = os.Remove(filepath.Join(runDir, "state"))
 	_ = os.Remove(filepath.Join(runDir, "ip_forward.orig"))
 	// remove runtime files (they contain the Wi-Fi password)
-	for _, f := range []string{"hostapd.conf", "dnsmasq.conf", "hostapd.pid", "dnsmasq.pid"} {
+	for _, f := range []string{"hostapd.conf", "dnsmasq.conf", "hostapd.pid", "dnsmasq.pid", "hostapd.log", "dnsmasq.log"} {
 		_ = os.Remove(filepath.Join(runDir, f))
 	}
 }
@@ -276,19 +276,57 @@ func cmdReload() {
 	if !ok {
 		log.Fatalf("routerd is not running (no state found)")
 	}
+
+	// Re-resolve the channel: "auto" re-detects from the STA link, a fixed
+	// number uses the value from the config.
+	ch, band := st.Channel, st.Band
+	if cfg.Channel == "" || cfg.Channel == "auto" {
+		if ch, band, err = detectChannel(st.InterfaceSTA); err != nil {
+			log.Fatalf("%v", err)
+		}
+	} else if n, err := strconv.Atoi(cfg.Channel); err == nil && n >= 1 && n <= 165 {
+		ch = n
+		if ch <= 14 {
+			band = "g"
+		} else {
+			band = "a"
+		}
+	}
+
+	// If the client subnet changed, drop the old gateway address first.
+	if cfg.Subnet != st.Subnet {
+		if oldCIDR, err := gatewayCIDR(st.Subnet); err == nil {
+			addrDel(st.InterfaceAP, oldCIDR)
+		}
+	}
+
 	stopProcs()
 	killOrphans()
-	if err := startHostapd(cfg, st.Channel, st.Band, runDir); err != nil {
+	if err := startHostapd(cfg, ch, band, runDir); err != nil {
 		cleanup(cfg)
 		log.Fatalf("reload failed: %v", err)
 	}
+
+	// hostapd resets the interface, so (re)assign the gateway address.
+	if gwCIDR, err := gatewayCIDR(cfg.Subnet); err != nil {
+		cleanup(cfg)
+		log.Fatalf("reload failed: %v", err)
+	} else if err := addrAdd(cfg.InterfaceAP, gwCIDR); err != nil {
+		cleanup(cfg)
+		log.Fatalf("reload failed: %v", err)
+	}
+
 	if err := startDnsmasq(cfg, runDir); err != nil {
 		cleanup(cfg)
 		log.Fatalf("reload failed: %v", err)
 	}
 	st.SSID = cfg.SSID
+	st.InterfaceAP = cfg.InterfaceAP
+	st.Subnet = cfg.Subnet
+	st.Channel = ch
+	st.Band = band
 	writeState(st)
-	logInfo("reloaded (ssid=%q channel=%d)", cfg.SSID, st.Channel)
+	logInfo("reloaded (ssid=%q channel=%d)", cfg.SSID, ch)
 }
 
 func main() {
