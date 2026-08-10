@@ -1,0 +1,37 @@
+# routerd configuration
+# Copy this file to /etc/routerd.conf and adjust as needed.
+
+# Network name shown to nearby devices.
+SSID=routerd
+
+# Wi-Fi password (WPA2-PSK). Minimum 8 characters.
+# Empty = open network without password.
+PASSWORD=
+
+# Channel for the access point.
+#   auto = follow the channel of your current Wi-Fi connection (recommended)
+#   1-11 (2.4 GHz) or 36-165 (5 GHz) = fixed channel
+CHANNEL=auto
+
+# Wireless client interface used as the internet uplink.
+#   auto = detect automatically (recommended)
+INTERFACE_STA=auto
+
+# Name of the virtual access point interface.
+INTERFACE_AP=ap0
+
+# Interface used for NAT (internet sharing).
+#   auto = the interface holding the default route
+UPLINK=auto
+
+# Subnet for connected clients.
+SUBNET=192.168.50.0/24
+
+# ISO 3166-1 country code for legal radio usage.
+COUNTRY=ID
+
+# Maximum number of connected clients.
+MAX_CLIENTS=16
+
+# DNS server advertised to clients (systemd-resolved stub by default).
+DNS=127.0.0.53

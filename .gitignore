@@ -1,0 +1,9 @@
+# routerd binary
+/routerd
+
+# build artifacts
+*.log
+
+# editor
+.idea/
+.vscode/
