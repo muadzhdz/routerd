@@ -20,16 +20,12 @@ is already connected to your network.
 
 ## How it works
 
-```
-                ┌─────────────────────────────── machine ───────────────────────────────┐
-   internet      │        wlan0 (client)              ap0 (virtual AP, same card)         │
- ◄────────── WiFi│ ◄─────────────────────────────────► +------------------------------+   │
-   (your router) │        NAT / forwarding            │  SSID: routerd                │   │
-                │        iptables MASQUERADE         │  DHCP: 192.168.50.10-254      │   │
-                │                                     │  DNS:  dnsmasq                │   │
-                └─────────────────────────────────────┴───────────────▲──────────────┘   │
-                                                                       │
-                                                        phones / laptops / IoT
+```mermaid
+flowchart LR
+    INET["Internet<br/>(your WiFi)"] -->|"WiFi uplink"| WLAN0["wlan0<br/>client"]
+    WLAN0 --> NAT["NAT / forwarding<br/>iptables MASQUERADE"]
+    NAT --> AP0["ap0 — virtual AP (same card)<br/>SSID: routerd · WPA2<br/>DHCP: 192.168.50.10-254 · DNS: dnsmasq"]
+    AP0 -->|"WiFi"| CLIENTS["Clients<br/>phones / laptops / IoT"]
 ```
 
 The driver (mac80211) lets one card act as a **station (client)** and an
