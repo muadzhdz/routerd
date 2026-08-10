@@ -1,7 +1,17 @@
-# routerd
+<div align="center">
 
-Turn any Linux machine with a Wi-Fi card into a **Wi-Fi access point + router**
-with a single command:
+<h1 align="center">routerd</h1>
+
+<p align="center">Turn any Linux machine with a Wi-Fi card into a <b>Wi-Fi access point + router</b> with a single command.</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8.svg" alt="Go">
+  <img src="https://img.shields.io/badge/version-0.1.0-green.svg" alt="Version">
+  <img src="https://img.shields.io/badge/platform-Linux-lightgrey.svg" alt="Platform: Linux">
+</p>
+
+</div>
 
 ```sh
 sudo systemctl start routerd
@@ -37,10 +47,10 @@ from your current connection (`CHANNEL=auto`).
 
 - Linux with a Wi-Fi card whose driver supports concurrent STA + AP
   (check with `iw list` → `valid interface combinations`).
-- Packages (Arch Linux):
-  ```sh
-  sudo pacman -S hostapd dnsmasq iw wireless-regdb
-  ```
+- Packages:
+  - **Arch Linux**: `sudo pacman -S hostapd dnsmasq iw wireless-regdb`
+  - **Debian/Ubuntu**: `sudo apt install hostapd dnsmasq iw wireless-regdb`
+    (On Ubuntu, enable the `universe` repository — `hostapd` is in it.)
 
 ## Install
 
@@ -48,7 +58,8 @@ from your current connection (`CHANNEL=auto`).
 git clone https://github.com/muadzhdz/routerd
 cd routerd
 make build          # optional, builds the binary
-sudo ./install.sh
+sudo ./install.sh                 # binary + config + systemd unit only
+sudo ./install.sh --with-deps     # ... plus hostapd/dnsmasq/iw/wireless-regdb (auto-detect pacman/apt)
 ```
 
 This installs:
