@@ -4,13 +4,6 @@
 
 <p align="center">Turn any Linux machine with a Wi-Fi card into a <b>Wi-Fi access point + router</b> with a single command.</p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
-  <img src="https://img.shields.io/badge/Go-1.26-00ADD8.svg" alt="Go">
-  <img src="https://img.shields.io/badge/version-0.1.0-green.svg" alt="Version">
-  <img src="https://img.shields.io/badge/platform-Linux-lightgrey.svg" alt="Platform: Linux">
-</p>
-
 </div>
 
 ```sh
@@ -30,12 +23,30 @@ is already connected to your network.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    INET["Internet<br/>(your WiFi)"] -->|"WiFi uplink"| WLAN0["wlan0<br/>client"]
-    WLAN0 --> NAT["NAT / forwarding<br/>iptables MASQUERADE"]
-    NAT --> AP0["ap0 — virtual AP (same card)<br/>SSID: routerd · WPA2<br/>DHCP: 192.168.50.10-254 · DNS: dnsmasq"]
-    AP0 -->|"WiFi"| CLIENTS["Clients<br/>phones / laptops / IoT"]
+```
+        Internet
+       (your WiFi)
+            │
+            ▼
+┌──────────────────────────────────────────────────┐
+│                    MACHINE                       │
+│                                                  │
+│    wlan0  ──  client uplink                      │
+│       │                                          │
+│       ▼                                          │
+│    NAT + forwarding                              │
+│    (iptables MASQUERADE)                         │
+│       │                                          │
+│       ▼                                          │
+│    ap0  ──  virtual AP (same card)               │
+└───────┬──────────────────────────────────────────┘
+        │  SSID: routerd (WPA2)
+        │  DHCP: 192.168.50.10-254 · DNS: dnsmasq
+        ▼
+┌──────────────────────────────────────────────────┐
+│                    CLIENTS                       │
+│         phones / laptops / IoT                   │
+└──────────────────────────────────────────────────┘
 ```
 
 The driver (mac80211) lets one card act as a **station (client)** and an
