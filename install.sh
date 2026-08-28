@@ -45,6 +45,14 @@ else
     echo "    /etc/routerd.conf already exists, leaving it untouched (use --update-config to overwrite)"
 fi
 
+echo "==> configuring /etc/routerd/vpn.conf"
+if [[ ! -f /etc/routerd/vpn.conf ]] || [[ "$UPDATE_CONFIG" -eq 1 ]]; then
+    install -Dm600 -o root -g root vpn.conf.example /etc/routerd/vpn.conf
+    echo "    updated /etc/routerd/vpn.conf with WireGuard sample profile"
+else
+    echo "    /etc/routerd/vpn.conf already exists, leaving it untouched"
+fi
+
 echo "==> reloading systemd"
 systemctl daemon-reload
 
