@@ -80,7 +80,7 @@ func cleanupRateLimit(ap string) {
 }
 
 // enableNAT saves the current forwarding state and installs iptables rules.
-func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMode bool, disableIPv6 bool, limitRateMbps int) error {
+func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMode bool, disableIPv6 bool, limitRateMbps int, enableVPN bool, vpnKillSwitch bool) error {
 	if err := os.WriteFile(filepath.Join(runDir, "ip_forward.orig"),
 		[]byte(readIPForward()), 0600); err != nil {
 		return err
@@ -131,6 +131,13 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 		"-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"); err != nil {
 		return err
 	}
+
+	// If VPN Kill-Switch is active, drop any client forwarding that is NOT using the designated VPN uplink
+	if enableVPN && vpnKillSwitch {
+		_, _ = runCmd(iptablesCmd, "-w", "-A", fwdChain, "-i", ap, "-j", "DROP")
+		logInfo("VPN Kill-Switch active (unencrypted fallback traffic blocked)")
+	}
+
 	if _, err := runCmd(iptablesCmd, "-w", "-I", "FORWARD", "-j", fwdChain); err != nil {
 		return err
 	}
@@ -156,21 +163,23 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 		logInfo("host isolation active (AP clients blocked from host services)")
 	}
 
-	// 6. TTL Spoofing (mangle table)
-	if spoofTTL > 0 {
+	// 6. MANGLE TABLE: TTL Spoofing & TCP MSS Clamping
+	if spoofTTL > 0 || enableVPN {
 		if out, err := runCmd(iptablesCmd, "-w", "-t", "mangle", "-N", mangleChain); err == nil ||
 			strings.Contains(out, "already exists") {
-			if _, err := runCmd(iptablesCmd, "-w", "-t", "mangle", "-A", mangleChain, "-i", ap, "-j", "TTL", "--ttl-set", strconv.Itoa(spoofTTL)); err == nil {
-				if _, err := runCmd(iptablesCmd, "-w", "-t", "mangle", "-I", "PREROUTING", "-j", mangleChain); err == nil {
-					logInfo("TTL spoofing active (TTL set to %d)", spoofTTL)
-				} else {
-					logWarn("cannot attach mangle PREROUTING chain: %v", err)
-				}
-			} else {
-				logWarn("cannot set TTL target rule (xt_TTL module missing?): %v", err)
+			if spoofTTL > 0 {
+				_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-A", mangleChain, "-i", ap, "-j", "TTL", "--ttl-set", strconv.Itoa(spoofTTL))
+				logInfo("TTL spoofing active (TTL set to %d)", spoofTTL)
+			}
+			if enableVPN {
+				_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-A", mangleChain, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu")
+				logInfo("TCP MSS Clamping active (anti-fragmentation for VPN tunnel)")
+			}
+			if _, err := runCmd(iptablesCmd, "-w", "-t", "mangle", "-I", "PREROUTING", "-j", mangleChain); err != nil {
+				logWarn("cannot attach mangle PREROUTING chain: %v", err)
 			}
 		} else {
-			logWarn("cannot create mangle chain for TTL spoofing: %v", err)
+			logWarn("cannot create mangle chain: %v", err)
 		}
 	}
 

@@ -17,13 +17,17 @@ is already connected to your network.
 
 - **Written in Go**, single static binary, zero dependencies.
 - **Access point (hostapd) + DHCP/DNS (dnsmasq) + NAT (iptables)** all managed together with clean start/stop.
+- **Transparent VPN Gateway**:
+  - **WireGuard / WARP VPN Integration**: Automatically route all connected clients through a WireGuard or Cloudflare WARP VPN tunnel (`ENABLE_VPN=true`).
+  - **Automated VPN Kill-Switch**: Instantly block unencrypted client traffic if the VPN connection drops (`VPN_KILL_SWITCH=true`).
+  - **TCP MSS Clamping**: Prevent packet fragmentation & HTTPS connection hangs over VPN tunnels.
 - **Built-in Stealth & Anonymity Engine**:
   - **Random MAC Address**: Cryptographic MAC randomization per session (hides hardware BSSID).
   - **Randomized Subnets**: Dynamic RFC1918 subnet selection (`SUBNET=random`) on startup.
   - **Host & Port Isolation**: Blocks AP clients from scanning or accessing host services/ports.
   - **TTL Spoofing**: Enforces outgoing TTL (`SPOOF_TTL=64`) to hide tethering & hop counts from ISP.
   - **Anti-IPv6 Leak Protection**: Automatically disables IPv6 on AP & installs `ip6tables` DROP rules.
-  - **Tor & VPN Ready**: Supports transparent Tor proxying (`TOR_MODE=true`) and WireGuard VPN uplinks (`UPLINK=wg0`).
+  - **Tor & VPN Ready**: Supports transparent Tor proxying (`TOR_MODE=true`) and WireGuard VPN uplinks.
 - **WPA2-PSK password support** (or open network) & optional hidden SSID (`HIDE_SSID=true`).
 - **Auto-follows channel** of your current Wi-Fi connection.
 
@@ -40,9 +44,10 @@ is already connected to your network.
 │    wlan0  ──  client uplink                      │
 │       │                                          │
 │       ▼                                          │
+│    WireGuard VPN Tunnel (wg0)                    │
 │    NAT + Forwarding + TTL Spoofing (64)          │
 │    Host Isolation Firewall (INPUT DROP)          │
-│    Anti-IPv6 Leak Rules                          │
+│    Anti-IPv6 Leak Rules + VPN Kill-Switch        │
 │       │                                          │
 │       ▼                                          │
 │    ap0  ──  virtual AP (Crypto Random MAC)       │
@@ -66,8 +71,8 @@ from your current connection (`CHANNEL=auto`).
 - Linux with a Wi-Fi card whose driver supports concurrent STA + AP
   (check with `iw list` → `valid interface combinations`).
 - Packages:
-  - **Arch Linux**: `sudo pacman -S hostapd dnsmasq iw wireless-regdb`
-  - **Debian/Ubuntu**: `sudo apt install hostapd dnsmasq iw wireless-regdb`
+  - **Arch Linux**: `sudo pacman -S hostapd dnsmasq iw wireless-regdb wireguard-tools`
+  - **Debian/Ubuntu**: `sudo apt install hostapd dnsmasq iw wireless-regdb wireguard-tools`
     (On Ubuntu, enable the `universe` repository — `hostapd` is in it.)
 
 ## Install
@@ -77,7 +82,7 @@ git clone https://github.com/muadzhdz/routerd
 cd routerd
 make build                     # optional, builds the binary
 sudo ./install.sh              # binary + config + systemd unit
-sudo ./install.sh --with-deps  # ... plus hostapd/dnsmasq/iw/wireless-regdb
+sudo ./install.sh --with-deps  # ... plus hostapd/dnsmasq/iw/wireless-regdb/wireguard-tools
 sudo ./install.sh --update-config # ... force update /etc/routerd.conf with latest options
 ```
 
@@ -109,13 +114,20 @@ TOR_MODE=false          # transparently proxy traffic through Tor
 DISABLE_IPV6=true       # disable IPv6 on AP & block IPv6 leaks
 HIDE_SSID=false         # hide SSID broadcast (hidden network)
 LIMIT_RATE_MBPS=0       # rate limit bandwidth in Mbps (0 = unlimited)
+
+# Transparent VPN Gateway Options
+ENABLE_VPN=true         # automatically route all connected clients through VPN
+VPN_MODE=wireguard      # wireguard, warp, custom, or dpibypass
+VPN_CONFIG=/etc/routerd/vpn.conf
+VPN_KILL_SWITCH=true    # block internet if VPN connection drops
 ```
 
 ## Usage
 
 ```sh
-sudo systemctl start routerd     # turn on the access point
-sudo routerd status              # SSID, channel, connected clients
+sudo systemctl start routerd     # turn on the access point & VPN
+sudo routerd status              # SSID, channel, connected clients, VPN status
+sudo routerd warp-setup          # generate Cloudflare WARP profile template
 sudo systemctl reload routerd    # apply SSID/password/channel/subnet changes
 sudo systemctl restart routerd   # full restart (recreates the AP interface)
 sudo systemctl enable routerd    # start automatically on boot

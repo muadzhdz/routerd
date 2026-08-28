@@ -62,4 +62,26 @@ HIDE_SSID=false
 # Bandwidth rate limit on AP interface in Mbps (0 = unlimited).
 LIMIT_RATE_MBPS=0
 
+# --- Transparent VPN Gateway Settings ---
+
+# Automatically route all connected AP client traffic through a VPN tunnel.
+ENABLE_VPN=false
+
+# VPN Mode:
+#   wireguard = use a WireGuard configuration file (.conf)
+#   warp      = use Cloudflare WARP WireGuard profile
+#   custom    = use an existing active VPN interface (wg0, tun0, tailscale0)
+#   dpibypass = bypass DPI censorship via TCP MSS & SNI fragmentation
+VPN_MODE=wireguard
+
+# Path to WireGuard profile (for wireguard or warp mode)
+VPN_CONFIG=/etc/routerd/vpn.conf
+
+# Interface name of the VPN (for custom mode or wg-quick interface)
+VPN_INTERFACE=wg0
+
+# VPN Kill-Switch: block client internet access if VPN connection drops
+VPN_KILL_SWITCH=true
+
+
 

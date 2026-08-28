@@ -26,9 +26,14 @@ type Config struct {
 	IsolateHost   bool // block connected AP clients from accessing local host services
 	SpoofTTL      int  // set outgoing TTL (e.g. 64) to hide tethering, 0 to disable
 	TorMode       bool // transparently proxy TCP & DNS traffic via Tor
-	DisableIPv6   bool // disable IPv6 on AP interface & block IPv6 traffic to prevent leaks
-	HideSSID      bool // hide SSID broadcast (hidden AP network)
-	LimitRateMbps int  // rate limit bandwidth on AP interface in Mbps, 0 to disable
+	DisableIPv6   bool   // disable IPv6 on AP interface & block IPv6 traffic to prevent leaks
+	HideSSID      bool   // hide SSID broadcast (hidden AP network)
+	LimitRateMbps int    // rate limit bandwidth on AP interface in Mbps, 0 to disable
+	EnableVPN     bool   // enable automatic VPN routing for all connected AP clients
+	VPNMode       string // "wireguard", "warp", "custom", or "dpibypass"
+	VPNConfig     string // path to WireGuard profile (.conf)
+	VPNInterface  string // VPN interface name (e.g. wg0, tun0)
+	VPNKillSwitch bool   // block client traffic if VPN connection fails/drops
 }
 
 func DefaultConfig() *Config {
@@ -50,6 +55,11 @@ func DefaultConfig() *Config {
 		DisableIPv6:   true,
 		HideSSID:      false,
 		LimitRateMbps: 0,
+		EnableVPN:     false,
+		VPNMode:       "wireguard",
+		VPNConfig:     "/etc/routerd/vpn.conf",
+		VPNInterface:  "wg0",
+		VPNKillSwitch: true,
 	}
 }
 
@@ -127,6 +137,16 @@ func LoadConfig(path string) (*Config, error) {
 			if n, err := strconv.Atoi(val); err == nil && n >= 0 {
 				cfg.LimitRateMbps = n
 			}
+		case "ENABLE_VPN":
+			cfg.EnableVPN = parseBool(val)
+		case "VPN_MODE":
+			cfg.VPNMode = strings.ToLower(val)
+		case "VPN_CONFIG":
+			cfg.VPNConfig = val
+		case "VPN_INTERFACE":
+			cfg.VPNInterface = val
+		case "VPN_KILL_SWITCH":
+			cfg.VPNKillSwitch = parseBool(val)
 		}
 	}
 	if err := sc.Err(); err != nil {

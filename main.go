@@ -26,11 +26,12 @@ Usage:
   routerd [options] <command>
 
 Commands:
-  start     Bring up the access point and NAT routing (foreground).
-  stop      Tear everything down (interfaces, DHCP, NAT rules).
-  status    Show the current state of the access point.
-  reload    Regenerate hostapd/dnsmasq configs and restart them.
-  version   Print the version.
+  start       Bring up the access point, NAT routing, and VPN (foreground).
+  stop        Tear everything down (interfaces, DHCP, NAT rules, VPN).
+  status      Show the current state of the access point & VPN.
+  reload      Regenerate hostapd/dnsmasq configs and restart them.
+  warp-setup  Generate a Cloudflare WARP WireGuard configuration template.
+  version     Print the version.
 
 Options:
   -c, --config PATH   Config file (default /etc/routerd.conf).
@@ -39,6 +40,7 @@ Options:
 Examples:
   sudo systemctl start routerd
   sudo routerd status
+  sudo routerd warp-setup
   sudo routerd -c /etc/routerd.conf start`)
 }
 
@@ -50,6 +52,8 @@ type State struct {
 	Channel      int
 	Band         string
 	Subnet       string
+	VPNMode      string
+	VPNActive    bool
 }
 
 func writeState(s State) {
@@ -62,6 +66,8 @@ func writeState(s State) {
 	fmt.Fprintf(&b, "CHANNEL=%d\n", s.Channel)
 	fmt.Fprintf(&b, "BAND=%s\n", s.Band)
 	fmt.Fprintf(&b, "SUBNET=%s\n", s.Subnet)
+	fmt.Fprintf(&b, "VPN_MODE=%s\n", s.VPNMode)
+	fmt.Fprintf(&b, "VPN_ACTIVE=%t\n", s.VPNActive)
 	if err := os.WriteFile(filepath.Join(runDir, "state"), []byte(b.String()), 0644); err != nil {
 		logWarn("cannot write state file: %v", err)
 	}
@@ -93,6 +99,10 @@ func readState() (State, bool) {
 			s.Band = val
 		case "SUBNET":
 			s.Subnet = val
+		case "VPN_MODE":
+			s.VPNMode = val
+		case "VPN_ACTIVE":
+			s.VPNActive = parseBool(val)
 		}
 	}
 	return s, s.InterfaceAP != ""
@@ -114,8 +124,6 @@ func dnsmasqRunning() bool {
 	return strings.TrimSpace(out) != ""
 }
 
-// killOrphans terminates hostapd/dnsmasq that might be left over from a
-// previous run that was killed hard.
 func killOrphans() {
 	_, _ = runCmd("pkill", "-f", "hostapd .*/routerd/hostapd.conf")
 	_, _ = runCmd("pkill", "-f", "dnsmasq .*/routerd/dnsmasq.conf")
@@ -125,6 +133,7 @@ func cleanup(cfg *Config) {
 	stopProcs()
 	killOrphans()
 	if cfg != nil {
+		stopVPN(cfg, runDir)
 		disableNAT(runDir, cfg.InterfaceAP)
 		if gwCIDR, err := gatewayCIDR(cfg.Subnet); err == nil {
 			addrDel(cfg.InterfaceAP, gwCIDR)
@@ -133,8 +142,7 @@ func cleanup(cfg *Config) {
 	}
 	_ = os.Remove(filepath.Join(runDir, "state"))
 	_ = os.Remove(filepath.Join(runDir, "ip_forward.orig"))
-	// remove runtime files (they contain the Wi-Fi password)
-	for _, f := range []string{"hostapd.conf", "dnsmasq.conf", "hostapd.pid", "dnsmasq.pid", "hostapd.log", "dnsmasq.log"} {
+	for _, f := range []string{"hostapd.conf", "dnsmasq.conf", "hostapd.pid", "dnsmasq.pid", "hostapd.log", "dnsmasq.log", "vpn_started"} {
 		_ = os.Remove(filepath.Join(runDir, f))
 	}
 }
@@ -148,7 +156,7 @@ func cmdStart() {
 		log.Fatalf("cannot create %s: %v", runDir, err)
 	}
 
-	cleanup(cfg) // remove any stale state from a previous run
+	cleanup(cfg)
 
 	failed := true
 	defer func() {
@@ -164,6 +172,14 @@ func cmdStart() {
 	uplink, err := detectUplink(cfg, sta)
 	if err != nil {
 		log.Fatalf("%v", err)
+	}
+	if cfg.Uplink == "" || cfg.Uplink == "auto" {
+		cfg.Uplink = uplink
+	}
+
+	activeUplink, err := startVPN(cfg, runDir)
+	if err != nil {
+		log.Fatalf("VPN setup error: %v", err)
 	}
 
 	var ch int
@@ -187,7 +203,7 @@ func cmdStart() {
 	}
 
 	cfg.InterfaceSTA = sta
-	cfg.Uplink = uplink
+	cfg.Uplink = activeUplink
 
 	if strings.EqualFold(cfg.Subnet, "random") {
 		cfg.Subnet = generateRandomSubnet()
@@ -207,8 +223,6 @@ func cmdStart() {
 	}
 	setUnmanaged(cfg.InterfaceAP)
 
-	// hostapd resets the interface when it enters AP mode, so the IPv4
-	// address must be assigned only after the AP is up.
 	if err := startHostapd(cfg, ch, band, runDir); err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -218,18 +232,19 @@ func cmdStart() {
 	if err := startDnsmasq(cfg, runDir); err != nil {
 		log.Fatalf("%v", err)
 	}
-	if err := enableNAT(runDir, uplink, cfg.InterfaceAP, cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6, cfg.LimitRateMbps); err != nil {
+	if err := enableNAT(runDir, activeUplink, cfg.InterfaceAP, cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6, cfg.LimitRateMbps, cfg.EnableVPN, cfg.VPNKillSwitch); err != nil {
 		log.Fatalf("%v", err)
 	}
 
 	writeState(State{
 		SSID: cfg.SSID, InterfaceAP: cfg.InterfaceAP, InterfaceSTA: sta,
-		Uplink: uplink, Channel: ch, Band: band, Subnet: cfg.Subnet,
+		Uplink: activeUplink, Channel: ch, Band: band, Subnet: cfg.Subnet,
+		VPNMode: cfg.VPNMode, VPNActive: cfg.EnableVPN,
 	})
 	failed = false
 
-	logInfo("routerd running: ssid=%q channel=%d band=%s ap=%s sta=%s uplink=%s subnet=%s clients=%d random_mac=%t isolate_host=%t spoof_ttl=%d tor_mode=%t disable_ipv6=%t hide_ssid=%t limit_mbps=%d",
-		cfg.SSID, ch, band, cfg.InterfaceAP, sta, uplink, cfg.Subnet, cfg.MaxClients, cfg.RandomMAC, cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6, cfg.HideSSID, cfg.LimitRateMbps)
+	logInfo("routerd running: ssid=%q channel=%d band=%s ap=%s sta=%s uplink=%s subnet=%s clients=%d random_mac=%t isolate_host=%t vpn_active=%t vpn_mode=%s kill_switch=%t",
+		cfg.SSID, ch, band, cfg.InterfaceAP, sta, activeUplink, cfg.Subnet, cfg.MaxClients, cfg.RandomMAC, cfg.IsolateHost, cfg.EnableVPN, cfg.VPNMode, cfg.VPNKillSwitch)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
@@ -260,16 +275,31 @@ func cmdStatus() {
 	}
 	clients := countStations(st.InterfaceAP)
 	fmt.Println("routerd is running:")
-	fmt.Printf("  SSID:      %s\n", st.SSID)
-	fmt.Printf("  Channel:   %d (%s band)\n", st.Channel, st.Band)
-	fmt.Printf("  AP iface:  %s (%s)\n", st.InterfaceAP, st.Subnet)
-	fmt.Printf("  STA iface: %s\n", st.InterfaceSTA)
-	fmt.Printf("  Uplink:    %s\n", st.Uplink)
-	if clients < 0 {
-		fmt.Println("  Clients:   n/a")
+	fmt.Printf("  SSID:        %s\n", st.SSID)
+	fmt.Printf("  Channel:     %d (%s band)\n", st.Channel, st.Band)
+	fmt.Printf("  AP iface:    %s (%s)\n", st.InterfaceAP, st.Subnet)
+	fmt.Printf("  STA iface:   %s\n", st.InterfaceSTA)
+	fmt.Printf("  Uplink:      %s\n", st.Uplink)
+	if st.VPNActive {
+		fmt.Printf("  VPN Status:  ACTIVE (Mode: %s)\n", st.VPNMode)
 	} else {
-		fmt.Printf("  Clients:   %d\n", clients)
+		fmt.Println("  VPN Status:  Disabled")
 	}
+	if clients < 0 {
+		fmt.Println("  Clients:     n/a")
+	} else {
+		fmt.Printf("  Clients:     %d\n", clients)
+	}
+}
+
+func cmdWarpSetup() {
+	target := "/etc/routerd/vpn.conf"
+	logInfo("generating Cloudflare WARP profile template at %s", target)
+	if err := generateWARPConfig(target); err != nil {
+		log.Fatalf("cannot generate WARP config: %v", err)
+	}
+	fmt.Printf("Generated WARP WireGuard profile template at %s\n", target)
+	fmt.Println("Fill in your WireGuard keys/endpoints in /etc/routerd/vpn.conf and set ENABLE_VPN=true in /etc/routerd.conf")
 }
 
 func cmdReload() {
@@ -282,8 +312,6 @@ func cmdReload() {
 		log.Fatalf("routerd is not running (no state found)")
 	}
 
-	// Re-resolve the channel: "auto" re-detects from the STA link, a fixed
-	// number uses the value from the config.
 	ch, band := st.Channel, st.Band
 	if cfg.Channel == "" || cfg.Channel == "auto" {
 		if ch, band, err = detectChannel(st.InterfaceSTA); err != nil {
@@ -298,7 +326,6 @@ func cmdReload() {
 		}
 	}
 
-	// If the client subnet changed, drop the old gateway address first.
 	if cfg.Subnet != st.Subnet {
 		if oldCIDR, err := gatewayCIDR(st.Subnet); err == nil {
 			addrDel(st.InterfaceAP, oldCIDR)
@@ -312,7 +339,6 @@ func cmdReload() {
 		log.Fatalf("reload failed: %v", err)
 	}
 
-	// hostapd resets the interface, so (re)assign the gateway address.
 	if gwCIDR, err := gatewayCIDR(cfg.Subnet); err != nil {
 		cleanup(cfg)
 		log.Fatalf("reload failed: %v", err)
@@ -372,6 +398,8 @@ func main() {
 		cmdStatus()
 	case "reload":
 		cmdReload()
+	case "warp-setup":
+		cmdWarpSetup()
 	case "version":
 		fmt.Printf("routerd %s\n", version)
 	default:
