@@ -6,6 +6,8 @@
 privatekey
 publickey
 *.key
+*.conf
+!routerd.conf.example
 wgcf-account.toml
 wgcf-profile.conf
 
