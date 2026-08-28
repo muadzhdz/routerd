@@ -19,14 +19,28 @@ for arg in "$@"; do
 done
 
 install_deps() {
-    echo "==> installing runtime dependencies"
+    echo "==> detecting package manager & installing dependencies"
     if command -v pacman >/dev/null 2>&1; then
+        echo "==> detected Arch Linux / Manjaro (pacman)"
         pacman -Sy --needed hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv
     elif command -v apt-get >/dev/null 2>&1; then
+        echo "==> detected Debian / Ubuntu / Mint (apt)"
         apt-get update
         apt-get install -y hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv resolvconf
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "==> detected Fedora / RHEL / Rocky / Alma (dnf)"
+        dnf install -y hostapd dnsmasq iw wireless-regdb wireguard-tools
+    elif command -v yum >/dev/null 2>&1; then
+        echo "==> detected RHEL / CentOS (yum)"
+        yum install -y hostapd dnsmasq iw wireless-regdb wireguard-tools
+    elif command -v zypper >/dev/null 2>&1; then
+        echo "==> detected openSUSE (zypper)"
+        zypper install -y hostapd dnsmasq iw wireless-regdb wireguard-tools
+    elif command -v apk >/dev/null 2>&1; then
+        echo "==> detected Alpine Linux (apk)"
+        apk add hostapd dnsmasq iw wireless-regdb wireguard-tools
     else
-        echo "error: no supported package manager found (pacman or apt-get)" >&2
+        echo "error: no supported package manager found (pacman, apt, dnf, yum, zypper, apk)" >&2
         exit 1
     fi
 }

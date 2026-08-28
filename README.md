@@ -75,13 +75,21 @@ The `mac80211` driver framework allows a single Wi-Fi card to operate simultaneo
 
 - Linux with a Wi-Fi card supporting concurrent STA + AP mode (verify with `iw list` → `valid interface combinations`).
 - Packages:
-  - **Arch Linux**:
+  - **Arch Linux / Manjaro**:
     ```sh
     sudo pacman -S hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv wgcf
     ```
-  - **Debian / Ubuntu**:
+  - **Debian / Ubuntu / Mint**:
     ```sh
     sudo apt install hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv resolvconf
+    ```
+  - **Fedora / RHEL / Rocky / Alma**:
+    ```sh
+    sudo dnf install hostapd dnsmasq iw wireless-regdb wireguard-tools
+    ```
+  - **openSUSE**:
+    ```sh
+    sudo zypper install hostapd dnsmasq iw wireless-regdb wireguard-tools
     ```
 
 ---
