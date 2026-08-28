@@ -1,8 +1,13 @@
 # routerd binary
 /routerd
 
-# build artifacts
+# build & key artifacts
 *.log
+privatekey
+publickey
+*.key
+wgcf-account.toml
+wgcf-profile.conf
 
 # editor
 .idea/
