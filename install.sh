@@ -23,10 +23,10 @@ done
 install_deps() {
     echo "==> installing dependencies"
     if command -v pacman >/dev/null 2>&1; then
-        pacman -Sy --needed hostapd dnsmasq iw wireless-regdb
+        pacman -Sy --needed hostapd dnsmasq iw wireless-regdb wireguard-tools
     elif command -v apt-get >/dev/null 2>&1; then
         apt-get update
-        apt-get install -y hostapd dnsmasq iw wireless-regdb
+        apt-get install -y hostapd dnsmasq iw wireless-regdb wireguard-tools
     else
         echo "error: no supported package manager found (pacman or apt-get)" >&2
         exit 1
