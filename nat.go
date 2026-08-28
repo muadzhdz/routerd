@@ -79,6 +79,21 @@ func cleanupRateLimit(ap string) {
 	}
 }
 
+func setupVPNRouting(ap string, enableVPN bool) {
+	if !enableVPN {
+		return
+	}
+	// Add policy routing rule so packets from AP interface use WireGuard table (51820)
+	_, _ = runCmd("ip", "rule", "add", "iif", ap, "table", "51820")
+	logInfo("VPN policy routing rule active (iif %s -> table 51820)", ap)
+}
+
+func cleanupVPNRouting(ap string) {
+	if ap != "" {
+		_, _ = runCmd("ip", "rule", "del", "iif", ap, "table", "51820")
+	}
+}
+
 // enableNAT saves the current forwarding state and installs iptables rules.
 func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMode bool, disableIPv6 bool, limitRateMbps int, enableVPN bool, vpnKillSwitch bool) error {
 	if err := os.WriteFile(filepath.Join(runDir, "ip_forward.orig"),
@@ -91,6 +106,9 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 
 	// 1. IPv6 Leak Protection
 	setupIPv6LeakProtection(ap, disableIPv6)
+
+	// 1b. VPN Policy Routing
+	setupVPNRouting(ap, enableVPN)
 
 	// 2. Tor Mode (PREROUTING nat)
 	if torMode {
@@ -191,6 +209,7 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 
 func disableNAT(runDir, ap string) {
 	cleanupIPv6LeakProtection(ap)
+	cleanupVPNRouting(ap)
 	cleanupRateLimit(ap)
 
 	// PREROUTING nat
