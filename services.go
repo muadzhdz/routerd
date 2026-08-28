@@ -164,7 +164,16 @@ func dnsmasqConf(cfg *Config) (string, error) {
 	}
 	add("port", "53")
 	add("no-resolv", "")
-	add("server", cfg.DNS)
+
+	dnsServer := cfg.DNS
+	if cfg.EnableVPN && (dnsServer == "127.0.0.53" || dnsServer == "127.0.0.1" || dnsServer == "") {
+		dnsServer = "1.1.1.1"
+	}
+	add("server", dnsServer)
+	if cfg.EnableVPN && dnsServer == "1.1.1.1" {
+		add("server", "1.0.0.1")
+	}
+
 	add("interface", cfg.InterfaceAP)
 	add("bind-interfaces", "")
 	add("listen-address", gw.String())
