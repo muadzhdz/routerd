@@ -22,10 +22,13 @@ INTERFACE_AP=ap0
 
 # Interface used for NAT (internet sharing).
 #   auto = the interface holding the default route
+#   wg0 / tun0 = route all client traffic through WireGuard/VPN interface
 UPLINK=auto
 
 # Subnet for connected clients.
-SUBNET=192.168.50.0/24
+#   192.168.50.0/24 = fixed subnet
+#   random = generate a random RFC1918 subnet every time routerd starts
+SUBNET=random
 
 # ISO 3166-1 country code for legal radio usage.
 COUNTRY=ID
@@ -35,3 +38,28 @@ MAX_CLIENTS=16
 
 # DNS server advertised to clients (systemd-resolved stub by default).
 DNS=127.0.0.53
+
+# --- Stealth & Anonymity Settings ---
+
+# Generate a 100% random MAC address for the AP interface on every start.
+RANDOM_MAC=true
+
+# Block connected AP clients from scanning or accessing local host services.
+ISOLATE_HOST=true
+
+# Set outgoing TTL to hide tethering / hop counts from ISP (64 recommended, 0 to disable).
+SPOOF_TTL=64
+
+# Transparently route all TCP and DNS traffic through Tor (requires local Tor service).
+TOR_MODE=false
+
+# Disable IPv6 on AP interface & block IPv6 forwarding to prevent leaks (recommended).
+DISABLE_IPV6=true
+
+# Hide SSID broadcast (hidden network mode).
+HIDE_SSID=false
+
+# Bandwidth rate limit on AP interface in Mbps (0 = unlimited).
+LIMIT_RATE_MBPS=0
+
+

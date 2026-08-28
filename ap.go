@@ -58,9 +58,16 @@ func detectUplink(cfg *Config, sta string) (string, error) {
 
 // createAPInterface adds a virtual AP interface on the same phy as the STA
 // interface, so the card acts as client and access point simultaneously.
-func createAPInterface(sta, ap string) error {
+func createAPInterface(sta, ap string, useRandomMAC bool) error {
 	_ = deleteAPInterface(ap)
-	mac := localAdminMAC(sta)
+	var mac string
+	if useRandomMAC {
+		mac = randomMAC()
+		logInfo("generated random MAC for %s: %s", ap, mac)
+	} else {
+		mac = localAdminMAC(sta)
+		logInfo("using deterministic LAA MAC for %s: %s", ap, mac)
+	}
 
 	// Preferred: create the interface directly in AP mode.
 	if out, err := runCmd("iw", "dev", sta, "interface", "add", ap, "type", "__ap", "addr", mac); err == nil {

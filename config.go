@@ -12,31 +12,50 @@ const defaultConfigPath = "/etc/routerd.conf"
 
 // Config holds the runtime configuration of routerd.
 type Config struct {
-	SSID         string
-	Password     string
-	Channel      string // "auto" or a channel number
-	InterfaceSTA string // wireless client interface (uplink wifi); "auto"
-	InterfaceAP  string // virtual AP interface
-	Uplink       string // NAT uplink interface; "auto"
-	Subnet       string // client CIDR
-	Country      string
-	MaxClients   int
-	DNS          string
+	SSID          string
+	Password      string
+	Channel       string // "auto" or a channel number
+	InterfaceSTA  string // wireless client interface (uplink wifi); "auto"
+	InterfaceAP   string // virtual AP interface
+	Uplink        string // NAT uplink interface; "auto"
+	Subnet        string // client CIDR or "random"
+	Country       string
+	MaxClients    int
+	DNS           string
+	RandomMAC     bool // generate cryptographically random MAC for AP interface
+	IsolateHost   bool // block connected AP clients from accessing local host services
+	SpoofTTL      int  // set outgoing TTL (e.g. 64) to hide tethering, 0 to disable
+	TorMode       bool // transparently proxy TCP & DNS traffic via Tor
+	DisableIPv6   bool // disable IPv6 on AP interface & block IPv6 traffic to prevent leaks
+	HideSSID      bool // hide SSID broadcast (hidden AP network)
+	LimitRateMbps int  // rate limit bandwidth on AP interface in Mbps, 0 to disable
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		SSID:         "routerd",
-		Password:     "",
-		Channel:      "auto",
-		InterfaceSTA: "auto",
-		InterfaceAP:  "ap0",
-		Uplink:       "auto",
-		Subnet:       "192.168.50.0/24",
-		Country:      "ID",
-		MaxClients:   16,
-		DNS:          "127.0.0.53",
+		SSID:          "routerd",
+		Password:      "",
+		Channel:       "auto",
+		InterfaceSTA:  "auto",
+		InterfaceAP:   "ap0",
+		Uplink:        "auto",
+		Subnet:        "192.168.50.0/24",
+		Country:       "ID",
+		MaxClients:    16,
+		DNS:           "127.0.0.53",
+		RandomMAC:     true,
+		IsolateHost:   true,
+		SpoofTTL:      64,
+		TorMode:       false,
+		DisableIPv6:   true,
+		HideSSID:      false,
+		LimitRateMbps: 0,
 	}
+}
+
+func parseBool(s string) bool {
+	v := strings.ToLower(strings.TrimSpace(s))
+	return v == "true" || v == "1" || v == "yes" || v == "on"
 }
 
 // LoadConfig reads the KEY=VALUE config file. Missing files fall back to
@@ -90,6 +109,24 @@ func LoadConfig(path string) (*Config, error) {
 			}
 		case "DNS":
 			cfg.DNS = val
+		case "RANDOM_MAC":
+			cfg.RandomMAC = parseBool(val)
+		case "ISOLATE_HOST":
+			cfg.IsolateHost = parseBool(val)
+		case "SPOOF_TTL":
+			if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+				cfg.SpoofTTL = n
+			}
+		case "TOR_MODE":
+			cfg.TorMode = parseBool(val)
+		case "DISABLE_IPV6":
+			cfg.DisableIPv6 = parseBool(val)
+		case "HIDE_SSID":
+			cfg.HideSSID = parseBool(val)
+		case "LIMIT_RATE_MBPS":
+			if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+				cfg.LimitRateMbps = n
+			}
 		}
 	}
 	if err := sc.Err(); err != nil {

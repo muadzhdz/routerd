@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"net"
 	"os"
@@ -112,15 +113,45 @@ func freqToChannel(freq int) (int, string) {
 func localAdminMAC(phys string) string {
 	data, err := os.ReadFile("/sys/class/net/" + phys + "/address")
 	if err != nil {
-		return "02:00:00:00:00:01"
+		return randomMAC()
 	}
 	parts := strings.Split(strings.TrimSpace(string(data)), ":")
 	if len(parts) != 6 {
-		return "02:00:00:00:00:01"
+		return randomMAC()
 	}
 	// set locally-administered bit and flip low bit of first octet
 	b, _ := strconv.ParseUint(parts[0], 16, 8)
 	b = (b ^ 0x02) | 0x02
 	parts[0] = fmt.Sprintf("%02x", b)
 	return strings.Join(parts, ":")
+}
+
+// randomMAC generates a cryptographically random locally-administered MAC address.
+func randomMAC() string {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "02:00:00:00:00:01"
+	}
+	// Set LAA bit (bit 1 of byte 0) and clear multicast bit (bit 0 of byte 0)
+	b[0] = (b[0] | 0x02) & 0xfe
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5])
+}
+
+// generateRandomSubnet picks a random RFC1918 IPv4 /24 subnet.
+func generateRandomSubnet() string {
+	var b [3]byte
+	_, _ = rand.Read(b[:])
+	switch b[0] % 3 {
+	case 0: // 10.X.Y.0/24
+		return fmt.Sprintf("10.%d.%d.0/24", b[1], b[2])
+	case 1: // 172.(16..31).X.0/24
+		secondOctet := 16 + (int(b[1]) % 16)
+		return fmt.Sprintf("172.%d.%d.0/24", secondOctet, b[2])
+	default: // 192.168.X.0/24 (avoid 0, 1, 50)
+		thirdOctet := int(b[1])
+		if thirdOctet == 0 || thirdOctet == 1 || thirdOctet == 50 {
+			thirdOctet += 10
+		}
+		return fmt.Sprintf("192.168.%d.0/24", thirdOctet)
+	}
 }

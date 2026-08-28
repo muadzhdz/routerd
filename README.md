@@ -2,7 +2,7 @@
 
 <h1 align="center">routerd</h1>
 
-<p align="center">Turn any Linux machine with a Wi-Fi card into a <b>Wi-Fi access point + router</b> with a single command.</p>
+<p align="center">Turn any Linux machine with a Wi-Fi card into a <b>Stealth Wi-Fi access point + router</b> with a single command.</p>
 
 </div>
 
@@ -15,11 +15,17 @@ connected, get internet access shared from your machine's existing Wi-Fi
 connection. No extra hardware needed — it runs on the **same** Wi-Fi card that
 is already connected to your network.
 
-- Written in Go, single static binary, zero dependencies.
-- Access point (hostapd) + DHCP/DNS (dnsmasq) + NAT (iptables) all managed
-  together with clean start/stop.
-- WPA2-PSK password support (or open network).
-- Auto-follows the channel of your current Wi-Fi connection.
+- **Written in Go**, single static binary, zero dependencies.
+- **Access point (hostapd) + DHCP/DNS (dnsmasq) + NAT (iptables)** all managed together with clean start/stop.
+- **Built-in Stealth & Anonymity Engine**:
+  - **Random MAC Address**: Cryptographic MAC randomization per session (hides hardware BSSID).
+  - **Randomized Subnets**: Dynamic RFC1918 subnet selection (`SUBNET=random`) on startup.
+  - **Host & Port Isolation**: Blocks AP clients from scanning or accessing host services/ports.
+  - **TTL Spoofing**: Enforces outgoing TTL (`SPOOF_TTL=64`) to hide tethering & hop counts from ISP.
+  - **Anti-IPv6 Leak Protection**: Automatically disables IPv6 on AP & installs `ip6tables` DROP rules.
+  - **Tor & VPN Ready**: Supports transparent Tor proxying (`TOR_MODE=true`) and WireGuard VPN uplinks (`UPLINK=wg0`).
+- **WPA2-PSK password support** (or open network) & optional hidden SSID (`HIDE_SSID=true`).
+- **Auto-follows channel** of your current Wi-Fi connection.
 
 ## How it works
 
@@ -34,14 +40,15 @@ is already connected to your network.
 │    wlan0  ──  client uplink                      │
 │       │                                          │
 │       ▼                                          │
-│    NAT + forwarding                              │
-│    (iptables MASQUERADE)                         │
+│    NAT + Forwarding + TTL Spoofing (64)          │
+│    Host Isolation Firewall (INPUT DROP)          │
+│    Anti-IPv6 Leak Rules                          │
 │       │                                          │
 │       ▼                                          │
-│    ap0  ──  virtual AP (same card)               │
+│    ap0  ──  virtual AP (Crypto Random MAC)       │
 └───────┬──────────────────────────────────────────┘
-        │  SSID: routerd (WPA2)
-        │  DHCP: 192.168.50.10-254 · DNS: dnsmasq
+        │  SSID: routerd (WPA2 / Hidden)
+        │  DHCP: Dynamic Subnet (10.x / 172.x / 192.168.x)
         ▼
 ┌──────────────────────────────────────────────────┐
 │                    CLIENTS                       │
@@ -68,9 +75,10 @@ from your current connection (`CHANNEL=auto`).
 ```sh
 git clone https://github.com/muadzhdz/routerd
 cd routerd
-make build          # optional, builds the binary
-sudo ./install.sh                 # binary + config + systemd unit only
-sudo ./install.sh --with-deps     # ... plus hostapd/dnsmasq/iw/wireless-regdb (auto-detect pacman/apt)
+make build                     # optional, builds the binary
+sudo ./install.sh              # binary + config + systemd unit
+sudo ./install.sh --with-deps  # ... plus hostapd/dnsmasq/iw/wireless-regdb
+sudo ./install.sh --update-config # ... force update /etc/routerd.conf with latest options
 ```
 
 This installs:
@@ -89,9 +97,18 @@ SSID=routerd            # network name
 PASSWORD=changeme       # WPA2 password (8-63 chars), empty = open
 CHANNEL=auto            # auto = follow your Wi-Fi's channel
 INTERFACE_AP=ap0        # virtual AP interface name
-SUBNET=192.168.50.0/24  # client subnet
+SUBNET=random           # random = dynamic RFC1918 subnet, or static CIDR (e.g. 192.168.50.0/24)
 COUNTRY=ID              # your ISO 3166-1 country code
 MAX_CLIENTS=16
+
+# Stealth & Security Options
+RANDOM_MAC=true         # random MAC per session (hides hardware BSSID)
+ISOLATE_HOST=true       # block client access to host ports & services
+SPOOF_TTL=64            # hide tethering / hop counts from ISP
+TOR_MODE=false          # transparently proxy traffic through Tor
+DISABLE_IPV6=true       # disable IPv6 on AP & block IPv6 leaks
+HIDE_SSID=false         # hide SSID broadcast (hidden network)
+LIMIT_RATE_MBPS=0       # rate limit bandwidth in Mbps (0 = unlimited)
 ```
 
 ## Usage

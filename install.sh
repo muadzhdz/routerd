@@ -13,9 +13,11 @@
 
 set -euo pipefail
 
+UPDATE_CONFIG=0
 WITH_DEPS=0
 for arg in "$@"; do
     [[ "$arg" == "--with-deps" ]] && WITH_DEPS=1
+    [[ "$arg" == "--update-config" ]] && UPDATE_CONFIG=1
 done
 
 install_deps() {
@@ -37,12 +39,12 @@ cd "$(dirname "$0")"
 
 make install
 
-echo "==> configuring /etc/routerd.conf (first run only)"
-if [[ ! -f /etc/routerd.conf ]]; then
+echo "==> configuring /etc/routerd.conf"
+if [[ ! -f /etc/routerd.conf ]] || [[ "$UPDATE_CONFIG" -eq 1 ]]; then
     install -Dm600 -o root -g root routerd.conf.example /etc/routerd.conf
-    echo "    created /etc/routerd.conf from the sample"
+    echo "    updated /etc/routerd.conf with latest sample config"
 else
-    echo "    /etc/routerd.conf already exists, leaving it untouched"
+    echo "    /etc/routerd.conf already exists, leaving it untouched (use --update-config to overwrite)"
 fi
 
 echo "==> reloading systemd"

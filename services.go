@@ -119,6 +119,9 @@ func hostapdConf(cfg *Config, ch int, band string) string {
 	add("interface", cfg.InterfaceAP)
 	add("driver", "nl80211")
 	add("ssid", cfg.SSID)
+	if cfg.HideSSID {
+		add("ignore_broadcast_ssid", "1")
+	}
 	add("hw_mode", hw)
 	add("channel", fmt.Sprintf("%d", ch))
 	if cfg.Country != "" {

@@ -125,7 +125,7 @@ func cleanup(cfg *Config) {
 	stopProcs()
 	killOrphans()
 	if cfg != nil {
-		disableNAT(runDir)
+		disableNAT(runDir, cfg.InterfaceAP)
 		if gwCIDR, err := gatewayCIDR(cfg.Subnet); err == nil {
 			addrDel(cfg.InterfaceAP, gwCIDR)
 		}
@@ -189,12 +189,17 @@ func cmdStart() {
 	cfg.InterfaceSTA = sta
 	cfg.Uplink = uplink
 
+	if strings.EqualFold(cfg.Subnet, "random") {
+		cfg.Subnet = generateRandomSubnet()
+		logInfo("generated random client subnet: %s", cfg.Subnet)
+	}
+
 	gwCIDR, err := gatewayCIDR(cfg.Subnet)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
-	if err := createAPInterface(sta, cfg.InterfaceAP); err != nil {
+	if err := createAPInterface(sta, cfg.InterfaceAP, cfg.RandomMAC); err != nil {
 		log.Fatalf("%v", err)
 	}
 	if err := interfaceUp(cfg.InterfaceAP); err != nil {
@@ -213,7 +218,7 @@ func cmdStart() {
 	if err := startDnsmasq(cfg, runDir); err != nil {
 		log.Fatalf("%v", err)
 	}
-	if err := enableNAT(runDir, uplink, cfg.InterfaceAP); err != nil {
+	if err := enableNAT(runDir, uplink, cfg.InterfaceAP, cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6, cfg.LimitRateMbps); err != nil {
 		log.Fatalf("%v", err)
 	}
 
@@ -223,8 +228,8 @@ func cmdStart() {
 	})
 	failed = false
 
-	logInfo("routerd running: ssid=%q channel=%d band=%s ap=%s sta=%s uplink=%s subnet=%s clients=%d",
-		cfg.SSID, ch, band, cfg.InterfaceAP, sta, uplink, cfg.Subnet, cfg.MaxClients)
+	logInfo("routerd running: ssid=%q channel=%d band=%s ap=%s sta=%s uplink=%s subnet=%s clients=%d random_mac=%t isolate_host=%t spoof_ttl=%d tor_mode=%t disable_ipv6=%t hide_ssid=%t limit_mbps=%d",
+		cfg.SSID, ch, band, cfg.InterfaceAP, sta, uplink, cfg.Subnet, cfg.MaxClients, cfg.RandomMAC, cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6, cfg.HideSSID, cfg.LimitRateMbps)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
