@@ -25,14 +25,24 @@ func startVPN(cfg *Config, runDir string) (string, error) {
 		}
 
 		if !fileExists(confPath) {
-			return "", fmt.Errorf("VPN configuration file not found at %s", confPath)
+			logWarn("VPN configuration file %s not found; falling back to direct uplink %s", confPath, cfg.Uplink)
+			cfg.EnableVPN = false
+			return cfg.Uplink, nil
+		}
+
+		if isConfigUnconfigured(confPath) {
+			logWarn("VPN configuration %s contains unconfigured/commented keys; falling back to direct uplink %s. Edit %s or set ENABLE_VPN=false", confPath, cfg.Uplink, confPath)
+			cfg.EnableVPN = false
+			return cfg.Uplink, nil
 		}
 
 		logInfo("starting WireGuard VPN tunnel using %s", confPath)
 		// Use wg-quick to bring up the interface
 		out, err := runCmd("wg-quick", "up", confPath)
 		if err != nil && !strings.Contains(out, "already exists") {
-			return "", fmt.Errorf("cannot start WireGuard VPN (%s): %s", confPath, strings.TrimSpace(out))
+			logWarn("cannot start WireGuard VPN (%s): %s; falling back to direct uplink %s", confPath, strings.TrimSpace(out), cfg.Uplink)
+			cfg.EnableVPN = false
+			return cfg.Uplink, nil
 		}
 
 		// Write tracking file to know wg-quick was started by routerd
@@ -104,4 +114,21 @@ func generateWARPConfig(path string) error {
 # AllowedIPs = 0.0.0.0/0, ::/0
 `
 	return os.WriteFile(path, []byte(content), 0600)
+}
+
+func isConfigUnconfigured(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(line), "privatekey") {
+			return false
+		}
+	}
+	return true
 }
