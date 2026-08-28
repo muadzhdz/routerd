@@ -83,6 +83,10 @@ func setupVPNRouting(ap string, enableVPN bool) {
 	if !enableVPN {
 		return
 	}
+	// Disable strict reverse path filtering on AP and VPN interfaces to prevent Linux kernel from dropping asymmetrical routed packets
+	_ = os.WriteFile(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", ap), []byte("0"), 0644)
+	_ = os.WriteFile("/proc/sys/net/ipv4/conf/all/rp_filter", []byte("0"), 0644)
+
 	// Add policy routing rule so packets from AP interface use WireGuard table (51820)
 	_, _ = runCmd("ip", "rule", "add", "iif", ap, "table", "51820")
 	logInfo("VPN policy routing rule active (iif %s -> table 51820)", ap)
