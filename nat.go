@@ -114,7 +114,7 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 	// 1b. VPN Policy Routing
 	setupVPNRouting(ap, enableVPN)
 
-	// 2. Tor Mode (PREROUTING nat)
+	// 2. Tor Mode or Forced VPN DNS (PREROUTING nat)
 	if torMode {
 		if out, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-N", natPreChain); err != nil &&
 			!strings.Contains(out, "already exists") {
@@ -127,6 +127,15 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 			return fmt.Errorf("cannot attach nat prerouting chain: %w", err)
 		}
 		logInfo("Tor transparent proxy active (redirecting TCP->9040, DNS->5353)")
+	} else if enableVPN {
+		if out, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-N", natPreChain); err == nil ||
+			strings.Contains(out, "already exists") {
+			_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain, "-i", ap, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "1.1.1.1:53")
+			_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain, "-i", ap, "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", "1.1.1.1:53")
+			if _, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-I", "PREROUTING", "-j", natPreChain); err == nil {
+				logInfo("Forced VPN DNS tunnel active (AP clients DNS -> 1.1.1.1 via WireGuard)")
+			}
+		}
 	}
 
 	// 3. NAT POSTROUTING: masquerade traffic leaving on the uplink.
