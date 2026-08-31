@@ -2,35 +2,26 @@
 
 <h1 align="center">routerd</h1>
 
-<p align="center">Turn any Linux machine with a Wi-Fi card into a <b>Stealth Wi-Fi Access Point + Router + Transparent WireGuard VPN Gateway</b> with a single command.</p>
+<p align="center">Turn any Linux machine with a Wi-Fi card into a <b>Stealth Wi-Fi Access Point + Router + Transparent WireGuard VPN Gateway</b> — in a single command.</p>
 
 </div>
 
 ```sh
-sudo systemctl start routerd
+git clone https://github.com/muadzhdz/routerd
+cd routerd
+sudo ./install.sh --with-deps --enable
 ```
 
-Nearby devices instantly see a network named `routerd` (configurable) and, once connected, get internet access shared from your machine's existing Wi-Fi connection. No extra hardware needed — it runs on the **same** Wi-Fi card that is already connected to your network.
+Nearby devices instantly see a network named `routerd` (configurable) and, once connected, get internet access shared from your machine's existing Wi-Fi connection. **No extra hardware needed** — it runs on the same Wi-Fi card that is already connected to your network.
 
-All connected devices automatically have their traffic routed through a secure **WireGuard / Cloudflare WARP VPN Tunnel** with zero client software installation required on connected phones, laptops, or IoT devices.
+All connected client traffic is transparently routed through a **WireGuard / Cloudflare WARP VPN tunnel** with zero configuration required on connected phones, laptops, or IoT devices.
 
-- **Written in Go**: Single static binary, zero runtime language dependencies.
-- **Unified Daemon**: Access point (`hostapd`), DHCP/DNS (`dnsmasq`), NAT (`iptables`), and VPN (`wg-quick`) managed together with clean lifecycle management.
-- **Transparent VPN Gateway**:
-  - **WireGuard / WARP VPN Integration**: Route all client traffic through a WireGuard or Cloudflare WARP tunnel (`ENABLE_VPN=true`).
-  - **Automated VPN Kill-Switch**: Block unencrypted client fallback traffic if the VPN connection drops (`VPN_KILL_SWITCH=true`).
-  - **TCP MSS Clamping**: Automatic TCP segment clamping (`TCPMSS --clamp-mss-to-pmtu`) to prevent packet fragmentation over VPN tunnels.
-  - **Forced Encrypted VPN DNS Tunneling**: Force all client DNS requests to `1.1.1.1` inside the WireGuard tunnel to bypass ISP DNS hijacking & censorship.
-  - **Policy Routing & Reverse Path Filtering**: Custom `ip rule` and `rp_filter=0` integration to prevent kernel drops under asymmetrical routing.
-- **Built-in Stealth & Anonymity Engine**:
-  - **Cryptographic Random MAC Address**: Dynamic LAA MAC randomization per session (`RANDOM_MAC=true`) to hide hardware BSSID.
-  - **Dynamic RFC1918 Subnets**: Dynamic random subnet selection (`SUBNET=random`) on startup to frustrate tracking.
-  - **Host & Port Isolation**: Blocks AP clients from scanning or accessing host services and ports (`ISOLATE_HOST=true`).
-  - **TTL Spoofing**: Enforces outgoing TTL (`SPOOF_TTL=64`) to hide tethering and hop counts from your ISP.
-  - **Anti-IPv6 Leak Protection**: Disables IPv6 on AP and enforces `ip6tables` DROP rules (`DISABLE_IPV6=true`).
-  - **Hidden SSID Broadcast**: Supports hidden access point operation (`HIDE_SSID=true`).
-  - **Bandwidth Rate Limiting**: Limit client bandwidth via Linux `tc` qdisc tbf (`LIMIT_RATE_MBPS`).
-  - **Tor Transparent Proxying**: Optional transparent proxying of TCP & DNS traffic through Tor (`TOR_MODE=true`).
+- **Written in Go** — single static binary, zero runtime dependencies
+- **Unified daemon** — `hostapd`, `dnsmasq`, `iptables`, and `wg-quick` managed together with clean lifecycle, watchdog, and atomic reload
+- **Transparent VPN gateway** — WireGuard / WARP / custom VPN / DPI bypass
+- **Built-in stealth engine** — random MAC, random subnet, TTL spoofing, IPv6 leak protection, host isolation
+- **Web dashboard** — dark-mode SPA with live status, bandwidth graphs, log tail, config editor, VPN management
+- **159 unit tests, race-detector clean, 44.7% coverage**
 
 ---
 
@@ -46,260 +37,343 @@ All connected devices automatically have their traffic routed through a secure *
 │   wlan0 ──────── Client Uplink (Physical Wi-Fi Card)  │
 │     │                                                  │
 │     ▼                                                  │
-│   WireGuard Tunnel (dev vpn / wg0)                      │
-│     │  ├─ Policy Routing (ip rule iif ap0 table 51820) │
-│     │  ├─ Forced Encrypted DNS (DNAT -> 1.1.1.1:53)   │
-│     │  ├─ TCP MSS Clamping (--clamp-mss-to-pmtu)      │
-│     │  └─ Automated Kill-Switch (DROP unencrypted)     │
+│   WireGuard Tunnel (wg0 / vpn)                         │
+│     │  ├─ Policy Routing  (ip rule iif ap0 → table 51820)
+│     │  ├─ Forced DNS      (DNAT client DNS → 1.1.1.1:53)
+│     │  ├─ TCP MSS Clamp   (--clamp-mss-to-pmtu)       │
+│     │  └─ Kill-Switch     (DROP unencrypted fallback)  │
 │     ▼                                                  │
-│   NAT + Host Isolation Firewall (INPUT DROP)           │
-│   Anti-IPv6 Leak Rules (ip6tables DROP)                │
+│   NAT + Host Isolation (iptables INPUT/FORWARD chains) │
+│   IPv6 Leak Protection (ip6tables DROP)                │
 │     │                                                  │
 │     ▼                                                  │
-│   ap0 ────────── Virtual AP (Random MAC: 3a:21:97:..)  │
+│   ap0 ─── Virtual AP  (Random MAC: 3a:21:97:…)        │
 └───────────────────────────┬────────────────────────────┘
-                            │ SSID: routerd (WPA2 / Hidden)
-                            │ DHCP: Dynamic Subnet (10.x / 172.x / 192.168.x)
+                            │ SSID: routerd (WPA2/WPA3 / hidden)
+                            │ DHCP: dynamic RFC1918 subnet
                             ▼
-┌────────────────────────────────────────────────────────┐
-│                    CLIENT DEVICES                      │
-│        Smartphones / Laptops / Smart TVs / IoT         │
-└────────────────────────────────────────────────────────┘
+               Connected Devices (phones, laptops, IoT)
 ```
-
-The `mac80211` driver framework allows a single Wi-Fi card to operate simultaneously as a **station (client)** and an **access point (AP)** on the same radio channel. `routerd` automatically detects your active connection's channel (`CHANNEL=auto`) and provisions the AP interface dynamically.
 
 ---
 
 ## Requirements
 
-- Linux with a Wi-Fi card supporting concurrent STA + AP mode (verify with `iw list` → `valid interface combinations`).
-- Packages:
-  - **Arch Linux / Manjaro**:
-    ```sh
-    sudo pacman -S hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv wgcf
-    ```
-  - **Debian / Ubuntu / Mint**:
-    ```sh
-    sudo apt install hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv resolvconf
-    ```
-  - **Fedora / RHEL / Rocky / Alma**:
-    ```sh
-    sudo dnf install hostapd dnsmasq iw wireless-regdb wireguard-tools
-    ```
-  - **openSUSE**:
-    ```sh
-    sudo zypper install hostapd dnsmasq iw wireless-regdb wireguard-tools
-    ```
+- Linux with a Wi-Fi card that supports **concurrent STA + AP mode** (verify with `iw list` — look for `valid interface combinations: … AP + station`)
+- Go 1.22+ (only needed to build from source — not needed at runtime)
+- System packages (installed automatically with `--with-deps`):
+
+| Package | Purpose | Arch | Debian/Ubuntu | Fedora/RHEL | openSUSE | Alpine |
+|---|---|---|---|---|---|---|
+| `hostapd` | Access point daemon | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `dnsmasq` | DHCP + DNS | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `iw` | Wi-Fi interface control | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `wireless-regdb` | Regulatory database | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `wireguard-tools` | `wg` + `wg-quick` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `openresolv` | DNS resolver for wg-quick | ✅ | ✅ | best-effort | best-effort | ✅ |
+| `resolvconf` | DNS resolver fallback | — | ✅ | — | — | — |
+| `iptables` | Firewall rules | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `iproute2` | `ip`, `tc` commands | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> **Note:** `openresolv` is required by `wg-quick` to configure DNS inside the VPN tunnel. On Fedora/RHEL/openSUSE it may not be in default repos — `routerd` will warn and fall back gracefully, but DNS may leak outside the tunnel without it.
 
 ---
 
 ## Installation
 
-Run the automated installer script:
+### One-command install (recommended)
 
 ```sh
 git clone https://github.com/muadzhdz/routerd
 cd routerd
-make build                        # builds the binary
-sudo ./install.sh --with-deps     # installs binary, config, systemd unit, NM rules & dependencies
+sudo ./install.sh --with-deps --enable
 ```
 
-Additional installer flags:
-- `--with-deps`: Automatically installs all system package dependencies via `pacman` or `apt-get`.
-- `--update-config`: Overwrites `/etc/routerd.conf` with the latest sample configuration.
+This single command:
+1. Detects your OS and installs all system dependencies
+2. Builds the `routerd` binary with Go
+3. Installs binary to `/usr/local/bin/routerd`
+4. Installs systemd unit, NetworkManager rule, sample config
+5. Creates `/run/routerd` runtime dir + tmpfiles.d persistence rule
+6. Reloads systemd and starts the service
 
-Installed components:
-- `/usr/local/bin/routerd` — main daemon executable
-- `/etc/routerd.conf` — main configuration file
-- `/etc/systemd/system/routerd.service` — systemd service unit
-- `/etc/NetworkManager/conf.d/90-routerd.conf` — NetworkManager unmanaged interface rule
+### Installer flags
+
+| Flag | Description |
+|---|---|
+| `--with-deps` | Auto-install all system packages (hostapd, dnsmasq, wireguard-tools, etc.) |
+| `--update-config` | Overwrite `/etc/routerd.conf` with the latest sample config |
+| `--enable` | Run `systemctl enable --now routerd` after install (start on boot) |
+| `--warp-setup` | Auto-generate a Cloudflare WARP WireGuard profile to `/etc/routerd/vpn.conf` |
+| `--gen-keys` | Generate a WireGuard keypair in `/etc/routerd/` and pre-fill `PrivateKey` into `vpn.conf` |
+
+### Examples
+
+```sh
+# Install + deps + auto-start + Cloudflare WARP VPN (easiest)
+sudo ./install.sh --with-deps --enable --warp-setup
+
+# Install + deps + auto-start + custom WireGuard keys (for own VPS / Mullvad / ProtonVPN)
+sudo ./install.sh --with-deps --enable --gen-keys
+
+# Install only (no service start, no deps)
+sudo ./install.sh
+
+# Refresh config to latest defaults
+sudo ./install.sh --update-config
+```
+
+### Installed files
+
+| Path | Description |
+|---|---|
+| `/usr/local/bin/routerd` | Main daemon binary |
+| `/etc/routerd.conf` | Main configuration file |
+| `/etc/routerd/vpn.conf` | WireGuard VPN profile |
+| `/etc/routerd/privatekey` | WireGuard private key (with `--gen-keys`) |
+| `/etc/routerd/publickey` | WireGuard public key (with `--gen-keys`) |
+| `/etc/systemd/system/routerd.service` | systemd unit |
+| `/etc/NetworkManager/conf.d/90-routerd.conf` | Keep NM away from `ap0` |
+| `/etc/tmpfiles.d/routerd.conf` | Recreate `/run/routerd` on reboot |
+
+---
+
+## VPN Setup
+
+### Option A: Cloudflare WARP (free, automated)
+
+```sh
+# If already installed:
+sudo routerd warp-setup
+
+# Or during install:
+sudo ./install.sh --with-deps --enable --warp-setup
+```
+
+Then enable VPN in `/etc/routerd.conf`:
+```ini
+ENABLE_VPN=true
+VPN_MODE=wireguard
+```
+
+Restart: `sudo systemctl restart routerd`
+
+### Option B: Custom WireGuard VPS / Mullvad / ProtonVPN
+
+**Auto key generation:**
+```sh
+sudo ./install.sh --gen-keys
+# → generates /etc/routerd/privatekey and /etc/routerd/publickey
+# → auto-fills PrivateKey in /etc/routerd/vpn.conf
+# → prints your public key to share with your VPN server
+```
+
+**Or manual:**
+```sh
+wg genkey | sudo tee /etc/routerd/privatekey | wg pubkey | sudo tee /etc/routerd/publickey
+```
+
+Then fill in `/etc/routerd/vpn.conf`:
+```ini
+[Interface]
+PrivateKey = <YOUR_PRIVATE_KEY>
+Address    = 10.2.0.2/32
+DNS        = 1.1.1.1, 1.0.0.1
+
+[Peer]
+PublicKey         = <SERVER_PUBLIC_KEY>
+Endpoint          = <SERVER_IP>:51820
+AllowedIPs        = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+```
+
+Enable in `/etc/routerd.conf`:
+```ini
+ENABLE_VPN=true
+VPN_MODE=wireguard
+VPN_DNS=1.1.1.1   # or your provider's DNS (e.g. 10.64.0.1 for Mullvad)
+```
+
+### Option C: Use an existing VPN interface
+
+```ini
+ENABLE_VPN=true
+VPN_MODE=custom
+VPN_INTERFACE=tun0   # or tailscale0, wg0, etc.
+```
+
+### Option D: DPI bypass (no VPN)
+
+Applies TCP MSS clamping + TTL normalization without a VPN tunnel — useful for bypassing ISP DPI/throttling:
+```ini
+ENABLE_VPN=true
+VPN_MODE=dpibypass
+```
 
 ---
 
 ## CLI Command Reference
-
-`routerd` provides an intuitive CLI interface for management:
 
 ```sh
 routerd [options] <command>
 ```
 
 | Command | Description |
-| --- | --- |
-| `start` | Starts the access point, NAT firewall, and WireGuard VPN tunnel in foreground. |
-| `stop` | Stops the access point, removes NAT rules, tears down VPN tunnel, and cleans up interfaces. |
-| `status` | Displays live status: SSID, Channel, Subnet, connected clients, and active VPN mode. |
-| `reload` | Regenerates `hostapd` and `dnsmasq` runtime configs, re-applies all NAT/VPN rules. |
-| `logs` | Tails hostapd and dnsmasq log files simultaneously. |
-| `dashboard` | Starts the web dashboard server (default port 8080). |
-| `warp-setup` | Generates an automated Cloudflare WARP WireGuard profile template at `/etc/routerd/vpn.conf`. |
-| `version` | Prints the version string. |
+|---|---|
+| `start` | Start AP, NAT routing, and VPN tunnel (foreground) |
+| `stop` | Stop everything: AP, DHCP, NAT rules, VPN tunnel |
+| `status` | Live status: SSID, channel, subnet, clients, VPN |
+| `reload` | Atomic reload: re-apply all config changes (VPN, NAT, DNS, isolation) with rollback on failure |
+| `logs` | Tail hostapd + dnsmasq logs simultaneously |
+| `dashboard` | Start web dashboard (default port 8080) |
+| `warp-setup` | Auto-generate Cloudflare WARP profile to `/etc/routerd/vpn.conf` |
+| `version` | Print version |
 
-Examples:
+Options: `-c <path>` / `--config <path>` — use alternate config file
+
 ```sh
-sudo systemctl start routerd     # start as systemd background service
-sudo routerd status              # check live status & connected clients
-sudo routerd logs                # tail hostapd + dnsmasq logs
-sudo routerd dashboard           # start web dashboard on :8080
-sudo routerd warp-setup          # generate Cloudflare WARP profile template
-sudo systemctl reload routerd    # reload config changes
-sudo systemctl stop routerd      # stop service cleanly
+sudo systemctl start routerd        # start as background service
+sudo routerd status                 # live status + connected clients
+sudo routerd logs                   # tail logs
+sudo routerd dashboard              # web UI at http://<gateway>:8080
+sudo routerd warp-setup             # generate WARP config
+sudo systemctl reload routerd       # apply config changes
+sudo systemctl stop routerd         # stop cleanly
+sudo systemctl enable --now routerd # start now + on every boot
 ```
 
 ---
 
 ## Web Dashboard
 
-routerd ships a built-in dark-mode web dashboard accessible from any device connected to the AP.
-
-```sh
-# Enable in /etc/routerd.conf
+Enable in `/etc/routerd.conf`:
+```ini
 DASHBOARD_ENABLED=true
 DASHBOARD_PORT=8080
-DASHBOARD_PASSWORD=yourpassword   # leave empty to disable auth
-
-# Start the dashboard
-sudo routerd dashboard
+DASHBOARD_PASSWORD=yourpassword   # leave empty for no auth
+DASHBOARD_BIND=0.0.0.0            # or 127.0.0.1 for localhost-only
 ```
 
-Open `http://<AP-gateway-ip>:8080` in any browser on a connected device.
-
-### Dashboard Pages
+Start: `sudo routerd dashboard`
+Open: `http://<AP-gateway-IP>:8080`
 
 | Page | Features |
-| --- | --- |
-| **Overview** | Live AP status, connected clients with MAC/IP/hostname, real-time bandwidth via WebSocket |
-| **Bandwidth** | 60-second rolling Chart.js graph, per-client TX/RX breakdown with progress bars |
-| **Logs** | Live tail of hostapd + dnsmasq logs with filter (all/hostapd/dnsmasq), pause/resume |
-| **Configuration** | Visual form editor + raw textarea for `/etc/routerd.conf`, Save & Reload button |
-| **VPN** | WireGuard tunnel status (endpoint, latency, last handshake), config editor, quick setup guide |
+|---|---|
+| **Overview** | Live AP status, connected clients (MAC/IP/hostname), real-time bandwidth via WebSocket |
+| **Bandwidth** | 60-second rolling Chart.js graph, per-client TX/RX breakdown |
+| **Logs** | Live tail of hostapd + dnsmasq with filter, pause/resume, auto-scroll |
+| **Configuration** | Form editor + raw textarea for `/etc/routerd.conf`, Save & Reload |
+| **VPN** | WireGuard status (endpoint, latency, last handshake), config editor, setup guide |
 
-### Dashboard Security
-
-- **Session cookie auth** with `HttpOnly` flag — no Basic Auth browser popup
-- **Brute force protection** — IP locked out for 5 minutes after 5 failed attempts
-- **CORS same-origin** — no wildcard `Access-Control-Allow-Origin`
-- **WebSocket origin validation** — only same-host connections accepted
+**Security:**
+- Session cookie auth (`HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS, 24h expiry)
+- Brute force protection — 5 failed attempts → 5 min lockout per IP
+- Same-origin CORS + WebSocket origin validation — no wildcard `Access-Control-Allow-Origin`
 
 ---
 
-## Configuration Guide (`/etc/routerd.conf`)
-
-Edit `/etc/routerd.conf` to customize `routerd`:
+## Configuration Reference (`/etc/routerd.conf`)
 
 ```ini
-# Network name broadcasted to nearby devices
-SSID=routerd
+# ── Basic ──────────────────────────────────────────────────────────────────
+SSID=routerd            # network name (1-32 chars, no = or newlines)
+PASSWORD=               # WPA2 password (8-63 chars) or empty for open network
+CHANNEL=auto            # auto (follow uplink) or 1-165
+INTERFACE_STA=auto      # wireless client interface (auto-detected)
+INTERFACE_AP=ap0        # virtual AP interface name
+UPLINK=auto             # NAT uplink (auto = default route interface)
+SUBNET=random           # random RFC1918 /24 or fixed e.g. 192.168.50.0/24
+COUNTRY=ID              # ISO 3166-1 country code for radio regulations
+MAX_CLIENTS=16          # max connected stations
+DNS=127.0.0.53          # upstream DNS (overridden by VPN_DNS when VPN active)
 
-# WPA2-PSK password (8-63 characters). Empty = open network without password
-PASSWORD=changeme
+# ── Stealth & Anonymity ────────────────────────────────────────────────────
+RANDOM_MAC=true         # random locally-administered MAC per session
+ISOLATE_HOST=true       # block AP clients from reaching host services
+SPOOF_TTL=64            # set outgoing TTL (hides tethering from ISP), 0=off
+TOR_MODE=false          # transparent Tor proxy for TCP + DNS
+DISABLE_IPV6=true       # disable IPv6 on AP + block IPv6 leaks (recommended)
+HIDE_SSID=false         # hidden SSID broadcast
+LIMIT_RATE_MBPS=0       # bandwidth limit per AP (0 = unlimited)
 
-# Radio channel: "auto" (follow active connection) or 1-165
-CHANNEL=auto
-
-# Wireless client interface used as internet uplink ("auto")
-INTERFACE_STA=auto
-
-# Virtual AP interface name
-INTERFACE_AP=ap0
-
-# Uplink interface for NAT ("auto" or specific interface like wg0)
-UPLINK=auto
-
-# Subnet for connected clients: "random" (dynamic RFC1918) or static CIDR (192.168.50.0/24)
-SUBNET=random
-
-# ISO 3166-1 country code for regulatory compliance
-COUNTRY=ID
-
-# Maximum allowed connected clients
-MAX_CLIENTS=16
-
-# Upstream DNS server for clients
-DNS=127.0.0.53
-
-# --- Stealth & Anonymity Settings ---
-RANDOM_MAC=true         # generate random MAC for AP per session
-ISOLATE_HOST=true       # block clients from scanning or accessing host services
-SPOOF_TTL=64            # outgoing TTL spoofing to hide tethering (0 to disable)
-TOR_MODE=false          # transparently proxy TCP & DNS via Tor
-DISABLE_IPV6=true       # disable IPv6 on AP & block IPv6 leaks
-HIDE_SSID=false         # hide SSID broadcast
-LIMIT_RATE_MBPS=0       # rate limit bandwidth in Mbps (0 = unlimited)
-
-# --- Transparent VPN Gateway Settings ---
-ENABLE_VPN=true         # route all connected clients through VPN
-VPN_MODE=wireguard      # wireguard, warp, custom, or dpibypass
+# ── VPN Gateway ────────────────────────────────────────────────────────────
+ENABLE_VPN=false        # enable transparent VPN routing for all AP clients
+VPN_MODE=wireguard      # wireguard | warp | custom | dpibypass
 VPN_CONFIG=/etc/routerd/vpn.conf
-VPN_INTERFACE=wg0
-VPN_KILL_SWITCH=true    # block client internet access if VPN connection drops
+VPN_INTERFACE=wg0       # used for custom mode or to name wg-quick interface
+VPN_KILL_SWITCH=true    # drop client traffic if VPN drops
+VPN_DNS=1.1.1.1         # forced DNS inside VPN tunnel (all client DNS → here)
+WPA3=false              # WPA3-SAE/WPA2-PSK transition mode
+
+# ── Dashboard ──────────────────────────────────────────────────────────────
+DASHBOARD_ENABLED=false
+DASHBOARD_PORT=8080
+DASHBOARD_BIND=0.0.0.0
+DASHBOARD_PASSWORD=     # empty = no auth (not recommended on public APs)
 ```
 
 ---
 
-## WireGuard VPN Setup Guide
+## Troubleshooting
 
-`routerd` supports three methods for configuring WireGuard VPN:
-
-### Option A: Cloudflare WARP (Free 1-Click Setup)
-
-To use Cloudflare WARP for free uncensored high-speed internet:
-
-1. Generate a Cloudflare WARP profile automatically using `wgcf`:
-   ```sh
-   wgcf register
-   wgcf generate
-   sudo mkdir -p /etc/routerd
-   sudo cp wgcf-profile.conf /etc/routerd/vpn.conf
-   ```
-2. Enable VPN in `/etc/routerd.conf`:
-   ```ini
-   ENABLE_VPN=true
-   VPN_MODE=wireguard
-   VPN_CONFIG=/etc/routerd/vpn.conf
-   ```
-3. Restart `routerd`:
-   ```sh
-   sudo systemctl restart routerd
-   sudo routerd status
-   ```
-
-### Option B: Custom WireGuard Server (VPS / Mullvad / ProtonVPN)
-
-If you own a WireGuard VPS or subscription:
-
-1. Generate a WireGuard keypair:
-   ```sh
-   wg genkey | tee privatekey | wg pubkey > publickey
-   ```
-2. Create `/etc/routerd/vpn.conf`:
-   ```ini
-   [Interface]
-   PrivateKey = <YOUR_PRIVATE_KEY>
-   Address = 10.2.0.2/32
-
-   [Peer]
-   PublicKey = <SERVER_PUBLIC_KEY>
-   Endpoint = <SERVER_IP>:51820
-   AllowedIPs = 0.0.0.0/0
-   ```
-3. Enable VPN in `/etc/routerd.conf` and restart `routerd`:
-   ```sh
-   sudo systemctl restart routerd
-   ```
+| Symptom | Cause | Fix |
+|---|---|---|
+| `hostapd exited during startup` | Driver lacks AP mode | `iw list` → check `valid interface combinations` includes `AP`. Check `/run/routerd/hostapd.log` |
+| `cannot start WireGuard VPN` | Missing `openresolv` or bad keys | Install `openresolv`. Verify `PrivateKey` in `/etc/routerd/vpn.conf` is not commented out |
+| `VPN Status: Disabled` | `vpn.conf` has placeholder keys | Run `sudo routerd warp-setup` or fill in real keys. routerd auto-detects and falls back gracefully |
+| `No internet on connected clients` | rp_filter / routing issue | routerd auto-sets `ip rule add iif ap0 table 51820` and `rp_filter=0`. Check `sudo routerd status` |
+| `DNS leak / blocked sites` | ISP hijacking port 53 | routerd forces DNS via `iptables DNAT → VPN_DNS:53`. Disable "Private DNS" on Android clients |
+| `iptables: exit status 4` | System uses `iptables-nft` | routerd auto-detects and strips `-w` flag for nft backends — should be transparent |
+| `ap0 already exists on reload` | Previous unclean shutdown | `sudo routerd stop` then `sudo routerd start` to force cleanup |
+| `dashboard: 401 Unauthorized` | Session expired or wrong password | Clear cookies or re-login at `http://<gateway>:8080/login.html` |
 
 ---
 
-## Troubleshooting Guide
+## Uninstall
 
-| Symptom | Likely Cause | Solution |
-| --- | --- | --- |
-| `hostapd exited during startup` | Driver does not support AP mode. | Run `iw list` and verify `AP` is listed under "Supported interface modes". Check `/run/routerd/hostapd.log`. |
-| `cannot start WireGuard VPN` | Missing `openresolv` or invalid keys. | Install `openresolv` via `sudo pacman -S openresolv` or `sudo apt install openresolv`. Verify keys in `/etc/routerd/vpn.conf`. |
-| `VPN Status: Disabled` | `vpn.conf` contains unconfigured placeholder keys. | `routerd` automatically falls back to direct uplink if keys are unconfigured. Edit `/etc/routerd/vpn.conf` with active keys. |
-| `No Internet Access on connected clients` | Routing table or reverse path filtering issue. | `routerd` automatically configures `ip rule add iif ap0 table 51820` and sets `rp_filter=0`. |
-| `DNS Leak / Blocked Sites not opening` | ISP DNS hijacking port 53. | `routerd` automatically forces client DNS to `1.1.1.1:53` inside the WireGuard tunnel via `iptables DNAT`. Disable Private DNS in client settings if enabled. |
+```sh
+sudo systemctl stop routerd
+sudo systemctl disable routerd
+sudo make uninstall
+```
+
+---
+
+## Development
+
+```sh
+# Build
+make build
+
+# Run tests with race detector
+make test
+
+# Generate coverage report
+make coverage
+
+# Check formatting
+make fmt
+
+# Vet
+make vet
+```
+
+**Project structure:**
+```
+routerd/
+├── main.go         — CLI entry point, cmdStart/Stop/Reload/Status/Logs
+├── config.go       — Config struct, DefaultConfig, LoadConfig
+├── runner.go       — CommandRunner interface (testability)
+├── util.go         — IP math, MAC generation, channel detection
+├── ap.go           — Virtual AP interface lifecycle (iw, ip)
+├── nat.go          — iptables rule install/teardown
+├── services.go     — hostapd/dnsmasq config gen, process manager, watchdog
+├── vpn.go          — WireGuard/WARP bringup, DPI bypass, wgcf integration
+├── state.go        — PID lock, runtime state file, clients.json writer
+├── clients.go      — Station enumeration, lease parsing
+├── doc.go          — Package-level documentation
+└── dashboard/      — Embedded dark-mode web dashboard (HTTP + WebSocket)
+```
 
 ---
 
