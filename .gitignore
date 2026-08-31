@@ -11,6 +11,10 @@ publickey
 wgcf-account.toml
 wgcf-profile.conf
 
+# test artifacts
+cover.out
+*.test
+
 # editor
 .idea/
 .vscode/
