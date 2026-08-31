@@ -40,11 +40,11 @@ iface_exists() { ip link show "$1" &>/dev/null; }
 
 # ── Baca SSID & password dari routerd yang sedang berjalan ───────────────────
 get_ap_credentials() {
-    # SSID dari state file (selalu up-to-date dengan AP yang running)
+    # Prioritas: pentest AP (vwifi-ap.sh) → production routerd
     local ssid
-    ssid=$(grep "^SSID=" /run/routerd/state 2>/dev/null | cut -d= -f2 || echo "")
+    ssid=$(grep "^SSID=" /tmp/vwifi-ap/pentest-state 2>/dev/null | cut -d= -f2 ||            grep "^SSID=" /run/routerd/state 2>/dev/null | cut -d= -f2 || echo "")
     if [[ -z "$ssid" ]]; then
-        err "routerd tidak running atau state file tidak ditemukan. Jalankan routerd dulu."
+        err "Tidak ada AP aktif. Jalankan: sudo vwifi/vwifi-ap.sh up  atau  sudo routerd start"
     fi
 
     # Password dari /etc/routerd.conf
@@ -56,11 +56,11 @@ get_ap_credentials() {
 
 # ── Baca channel AP yang aktif ───────────────────────────────────────────────
 get_ap_channel() {
-    grep "^CHANNEL=" /run/routerd/state 2>/dev/null | cut -d= -f2 || echo "auto"
+    grep "^CHANNEL=" /tmp/vwifi-ap/pentest-state 2>/dev/null | cut -d= -f2 ||     grep "^CHANNEL=" /run/routerd/state 2>/dev/null | cut -d= -f2 || echo "6"
 }
 
 get_ap_interface() {
-    grep "^INTERFACE_AP=" /run/routerd/state 2>/dev/null | cut -d= -f2 || echo "ap0"
+    grep "^INTERFACE_AP=" /tmp/vwifi-ap/pentest-state 2>/dev/null | cut -d= -f2 ||     grep "^INTERFACE_AP=" /run/routerd/state 2>/dev/null | cut -d= -f2 || echo "ap0"
 }
 
 # ── Command: up ───────────────────────────────────────────────────────────────
