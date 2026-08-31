@@ -200,9 +200,6 @@ input, textarea, select { font-family: inherit; }
   color: var(--red) !important;
 }
 
-/* Remove old logout selector */
-a.nav-item[href="/auth/logout"] { display: none; }
-
 .sidebar-spacer { flex: 1; }
 
 /* ─── Main content — centered ────────────────────────────── */
