@@ -11,10 +11,12 @@
 
 <p>Turn any Linux machine with a Wi-Fi card into a <b>Stealth Wi-Fi AP + Router + Transparent WireGuard VPN Gateway</b></p>
 
-[![CI](https://github.com/muadzhdz/routerd/actions/workflows/ci.yml/badge.svg)](https://github.com/muadzhdz/routerd/actions/workflows/ci.yml)
-![Coverage](https://img.shields.io/badge/coverage-44.7%25-brightgreen)
-![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)
-![License](https://img.shields.io/badge/license-MIT-blue)
+<p>
+  <a href="https://github.com/muadzhdz/routerd/actions/workflows/ci.yml"><img src="https://github.com/muadzhdz/routerd/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/coverage-44.7%25-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go" alt="Go">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
+</p>
 
 </div>
 
