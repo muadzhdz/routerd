@@ -7,7 +7,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -23,6 +25,59 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// --- Session store ----------------------------------------------------------
+
+const sessionCookieName = "routerd_session"
+const sessionDuration   = 24 * time.Hour
+
+type sessionStore struct {
+	mu       sync.RWMutex
+	sessions map[string]time.Time // token → expiry
+}
+
+func newSessionStore() *sessionStore {
+	s := &sessionStore{sessions: make(map[string]time.Time)}
+	go s.cleanup()
+	return s
+}
+
+func (s *sessionStore) create() string {
+	b := make([]byte, 24)
+	_, _ = rand.Read(b)
+	token := hex.EncodeToString(b)
+	s.mu.Lock()
+	s.sessions[token] = time.Now().Add(sessionDuration)
+	s.mu.Unlock()
+	return token
+}
+
+func (s *sessionStore) valid(token string) bool {
+	s.mu.RLock()
+	exp, ok := s.sessions[token]
+	s.mu.RUnlock()
+	return ok && time.Now().Before(exp)
+}
+
+func (s *sessionStore) revoke(token string) {
+	s.mu.Lock()
+	delete(s.sessions, token)
+	s.mu.Unlock()
+}
+
+func (s *sessionStore) cleanup() {
+	t := time.NewTicker(10 * time.Minute)
+	for range t.C {
+		now := time.Now()
+		s.mu.Lock()
+		for tok, exp := range s.sessions {
+			if now.After(exp) {
+				delete(s.sessions, tok)
+			}
+		}
+		s.mu.Unlock()
+	}
+}
+
 // Server is the dashboard HTTP server.
 type Server struct {
 	configPath  string
@@ -33,7 +88,8 @@ type Server struct {
 	bind        string
 	port        int
 
-	hub *wsHub
+	hub      *wsHub
+	sessions *sessionStore
 }
 
 // NewServer constructs a Server from the provided parameters.
@@ -47,12 +103,17 @@ func NewServer(configPath, vpnConfPath, runDir, version, bind, password string, 
 		bind:        bind,
 		port:        port,
 		hub:         newWSHub(),
+		sessions:    newSessionStore(),
 	}
 }
 
 // Run starts the HTTP server and blocks until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
+
+	// Auth endpoints (always public).
+	mux.HandleFunc("/auth/login",  s.handleAuthLogin)
+	mux.HandleFunc("/auth/logout", s.handleAuthLogout)
 
 	// Static files (embedded).
 	mux.Handle("/", http.FileServer(http.FS(staticFiles)))
@@ -63,7 +124,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// WebSocket endpoint.
 	mux.HandleFunc("/ws", s.handleWS)
 
-	// Wrap everything with auth middleware.
+	// Wrap everything with auth middleware (login page is exempted inside).
 	handler := s.authMiddleware(corsMiddleware(mux))
 
 	addr := fmt.Sprintf("%s:%d", s.bind, s.port)
@@ -96,20 +157,91 @@ func (s *Server) Run(ctx context.Context) error {
 
 // --- Auth middleware ---------------------------------------------------------
 
+// publicPaths are always accessible without authentication.
+var publicPaths = map[string]bool{
+	"/login.html":   true,
+	"/auth/login":   true,
+	"/style.css":    true,
+}
+
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// No password set — allow everything.
 		if s.password == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		_, pass, ok := r.BasicAuth()
-		if !ok || subtle.ConstantTimeCompare([]byte(pass), []byte(s.password)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Basic realm="routerd dashboard"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+		// Always allow public paths.
+		if publicPaths[r.URL.Path] {
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r)
+
+		// Check session cookie.
+		if cookie, err := r.Cookie(sessionCookieName); err == nil {
+			if s.sessions.valid(cookie.Value) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// API requests get 401 JSON, not a redirect.
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"ok":false,"message":"Unauthorized"}`))
+			return
+		}
+
+		// Everything else → redirect to login.
+		http.Redirect(w, r, "/login.html", http.StatusFound)
 	})
+}
+
+// handleAuthLogin validates the password and issues a session cookie.
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(body.Password), []byte(s.password)) != 1 {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"ok":false,"message":"Invalid password"}`))
+		return
+	}
+	token := s.sessions.create()
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(sessionDuration.Seconds()),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"ok":true,"message":"Authenticated"}`))
+}
+
+// handleAuthLogout revokes the session cookie.
+func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		s.sessions.revoke(cookie.Value)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:   sessionCookieName,
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	http.Redirect(w, r, "/login.html", http.StatusFound)
 }
 
 // --- CORS middleware (for dev/API access) ------------------------------------

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>routerd — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080808;
+    --surface:  rgba(12,12,12,0.72);
+    --border:   rgba(255,255,255,0.07);
+    --border-2: rgba(255,255,255,0.12);
+    --text:     #ededed;
+    --muted:    #666;
+    --dim:      #333;
+    --accent:   #4ade80;
+    --red:      #f87171;
+    --font:     'Inter', system-ui, sans-serif;
+    --mono:     'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse at center, rgba(74,222,128,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  /* Card */
+  .card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px;
+    animation: cardIn 0.4s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Brand */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+  .brand-icon {
+    width: 36px; height: 36px;
+    background: rgba(74,222,128,0.08);
+    border: 1px solid rgba(74,222,128,0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+  }
+  .brand-name {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    color: var(--text);
+  }
+  .brand-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-top: 1px;
+  }
+
+  /* Form */
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 16px;
+  }
+  label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .input-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--dim);
+    pointer-events: none;
+    display: flex;
+  }
+  input {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 10px 12px 10px 38px;
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  input:focus {
+    border-color: rgba(74,222,128,0.3);
+    background: rgba(74,222,128,0.03);
+  }
+  input::placeholder { color: var(--dim); }
+
+  /* Eye toggle for password */
+  .eye-btn {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    transition: color 0.15s;
+  }
+  .eye-btn:hover { color: var(--text); }
+
+  /* Error msg */
+  .error-msg {
+    font-size: 12px;
+    color: var(--red);
+    font-family: var(--mono);
+    display: none;
+    align-items: center;
+    gap: 6px;
+    margin-top: -8px;
+    margin-bottom: 8px;
+    animation: fadeIn 0.2s ease;
+  }
+  .error-msg.show { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Submit button */
+  .btn-submit {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+    letter-spacing: 0.1px;
+  }
+  .btn-submit:hover { background: #22d45f; transform: translateY(-1px); }
+  .btn-submit:active { transform: translateY(0); }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Loading state */
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Footer note */
+  .note {
+    margin-top: 28px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .note span { color: var(--accent); }
+
+  /* Toast — portfolio style */
+  #toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    z-index: 9999;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: rgba(10,10,10,0.85);
+    border: 1px solid rgba(255,255,255,0.07);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 4px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    pointer-events: none;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; pointer-events: all; }
+  #toast.ok  { border-left: 3px solid var(--accent); }
+  #toast.err { border-left: 3px solid var(--red); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+          <circle cx="12" cy="20" r="1" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">routerd</div>
+        <div class="brand-sub">dashboard access</div>
+      </div>
+    </div>
+
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Password</label>
+        <div class="input-wrap">
+          <span class="input-icon">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <input
+            type="password"
+            id="password"
+            placeholder="Enter dashboard password"
+            autocomplete="current-password"
+            autofocus
+          >
+          <button type="button" class="eye-btn" onclick="toggleEye()" id="eye-btn">
+            <svg id="eye-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="error-msg" id="error-msg">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span id="error-text">Invalid password</span>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btn-submit">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        Sign in
+      </button>
+    </form>
+
+    <div class="note">
+      protected by routerd &middot; set <span>DASHBOARD_PASSWORD</span> in config
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+function toggleEye() {
+  const input = document.getElementById('password');
+  const icon  = document.getElementById('eye-icon');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.innerHTML = `
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>`;
+  } else {
+    input.type = 'password';
+    icon.innerHTML = `
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>`;
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const pwd = document.getElementById('password').value;
+  if (!pwd) {
+    showError('Password cannot be empty');
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Verifying...';
+
+  try {
+    const r = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+
+    if (r.ok) {
+      btn.innerHTML = `
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Access granted`;
+      showToast('Access granted', 'ok');
+      setTimeout(() => { window.location.href = '/'; }, 600);
+    } else {
+      showError('Invalid password — try again');
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        Sign in`;
+      document.getElementById('password').focus();
+      document.getElementById('password').select();
+    }
+  } catch {
+    showError('Connection error — is routerd running?');
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+        <polyline points="10 17 15 12 10 7"/>
+        <line x1="15" y1="12" x2="3" y2="12"/>
+      </svg>
+      Sign in`;
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  document.getElementById('error-text').textContent = msg;
+  el.classList.add('show');
+  document.getElementById('password').style.borderColor = 'rgba(248,113,113,0.4)';
+  setTimeout(() => {
+    el.classList.remove('show');
+    document.getElementById('password').style.borderColor = '';
+  }, 3000);
+}
+
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  const ico = type === 'ok'
+    ? `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`
+    : `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+  t.innerHTML = ico + msg;
+  t.className = `show ${type}`;
+  setTimeout(() => { t.className = ''; }, 3200);
+}
+</script>
+</body>
+</html>
