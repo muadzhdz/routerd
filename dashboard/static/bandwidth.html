@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>routerd — Bandwidth</title>
+<link rel="stylesheet" href="/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="layout">
+
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
+      </svg>
+      routerd
+    </div>
+    <div class="topbar-right">
+      <span class="status-pill stopped" id="status-pill">
+        <span class="dot"></span><span id="status-text">Loading</span>
+      </span>
+      <button class="btn btn-sm" onclick="doAction('reload')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Reload
+      </button>
+    </div>
+  </header>
+
+  <nav class="sidebar">
+    <span class="nav-section">Monitor</span>
+    <a href="/" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+      </svg>
+      Overview
+    </a>
+    <a href="/bandwidth.html" class="nav-item active">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Bandwidth
+    </a>
+    <a href="/logs.html" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      Logs
+    </a>
+    <span class="nav-section">Manage</span>
+    <a href="/config.html" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Configuration
+    </a>
+    <a href="/vpn.html" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      VPN
+    </a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer" id="footer-version">routerd</div>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <div class="page-title">Bandwidth Monitor</div>
+      <div class="page-sub">Real-time per-client traffic via AP interface counters</div>
+    </div>
+
+    <!-- Total stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label" style="color:var(--blue)">
+          <svg width="12" height="12" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+          </svg>
+          Total Download
+        </div>
+        <div class="stat-value" id="total-rx" style="color:var(--blue)">—</div>
+        <div class="stat-sub">incoming to AP clients</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label" style="color:var(--green)">
+          <svg width="12" height="12" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24">
+            <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+          </svg>
+          Total Upload
+        </div>
+        <div class="stat-value" id="total-tx" style="color:var(--green)">—</div>
+        <div class="stat-sub">outgoing from AP clients</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">60-Second Traffic History</span>
+        <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
+          <span style="display:flex;align-items:center;gap:5px">
+            <span style="width:10px;height:2px;background:var(--blue);display:inline-block;border-radius:1px"></span>
+            Download
+          </span>
+          <span style="display:flex;align-items:center;gap:5px">
+            <span style="width:10px;height:2px;background:var(--green);display:inline-block;border-radius:1px"></span>
+            Upload
+          </span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="bw-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Per-client -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Per-Client Breakdown</span>
+        <span class="badge badge-gray" id="client-bw-count">0 clients</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>MAC</th>
+              <th>IP</th>
+              <th>Download</th>
+              <th style="min-width:140px"></th>
+              <th>Upload</th>
+              <th style="min-width:140px"></th>
+            </tr>
+          </thead>
+          <tbody id="client-bw-tbody">
+            <tr><td colspan="6"><div class="empty-state"><p>No clients connected</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// Chart setup
+const ctx = document.getElementById('bw-chart').getContext('2d');
+const POINTS = 60;
+const labels = Array(POINTS).fill('');
+const rxData  = Array(POINTS).fill(0);
+const txData  = Array(POINTS).fill(0);
+
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'Download',
+        data: rxData,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+      {
+        label: 'Upload',
+        data: txData,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    interaction: { intersect: false, mode: 'index' },
+    scales: {
+      x: {
+        display: false,
+      },
+      y: {
+        display: true,
+        ticks: {
+          color: '#555',
+          font: { size: 10 },
+          callback: v => humanBps(v),
+        },
+        grid: { color: '#1a1a1a' },
+        border: { color: '#2a2a2a' },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#111',
+        borderColor: '#333',
+        borderWidth: 1,
+        titleColor: '#888',
+        bodyColor: '#e8e8e8',
+        callbacks: {
+          label: ctx => `${ctx.dataset.label}: ${humanBps(ctx.parsed.y)}`,
+        },
+      },
+    },
+  },
+});
+
+function humanBps(bps) {
+  if (bps >= 1e6) return (bps / 1e6).toFixed(1) + ' Mbps';
+  if (bps >= 1e3) return (bps / 1e3).toFixed(1) + ' Kbps';
+  return bps + ' bps';
+}
+
+// WebSocket
+let ws, reconnectTimer;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    try { handlePush(JSON.parse(e.data)); } catch {}
+  };
+  ws.onclose = () => {
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+}
+
+function handlePush(data) {
+  // Status pill
+  const pill = document.getElementById('status-pill');
+  if (data.running !== undefined) {
+    pill.className = 'status-pill ' + (data.running ? 'running' : 'stopped');
+    document.getElementById('status-text').textContent = data.running ? 'Running' : 'Stopped';
+  }
+
+  const bw = data.bandwidth;
+  if (!bw) return;
+
+  // Totals
+  document.getElementById('total-rx').textContent = bw.total_rx_human || '0 bps';
+  document.getElementById('total-tx').textContent = bw.total_tx_human || '0 bps';
+
+  // Chart: use history array if available
+  if (bw.history && bw.history.length) {
+    const hist = bw.history;
+    // Pad to POINTS
+    const rxArr = Array(POINTS).fill(0);
+    const txArr = Array(POINTS).fill(0);
+    hist.slice(-POINTS).forEach((p, i) => {
+      const idx = POINTS - hist.slice(-POINTS).length + i;
+      rxArr[idx] = p.rx;
+      txArr[idx] = p.tx;
+    });
+    rxArr.forEach((v, i) => { rxData[i] = v; txData[i] = v; });
+    // Correct: separate datasets
+    rxData.splice(0, POINTS, ...rxArr);
+    txData.splice(0, POINTS, ...txArr);
+    // Actually fix this properly:
+    chart.data.datasets[0].data.splice(0, POINTS, ...rxArr);
+    chart.data.datasets[1].data.splice(0, POINTS, ...txArr);
+  } else {
+    // Just append current point
+    chart.data.datasets[0].data.push(bw.total_rx_bps || 0);
+    chart.data.datasets[1].data.push(bw.total_tx_bps || 0);
+    if (chart.data.datasets[0].data.length > POINTS) {
+      chart.data.datasets[0].data.shift();
+      chart.data.datasets[1].data.shift();
+    }
+  }
+  chart.update('none');
+
+  // Per-client table
+  const clients = bw.clients || [];
+  document.getElementById('client-bw-count').textContent = `${clients.length} client${clients.length !== 1 ? 's' : ''}`;
+  const maxRx = Math.max(1, ...clients.map(c => c.rx_bps || 0));
+  const maxTx = Math.max(1, ...clients.map(c => c.tx_bps || 0));
+  const tbody = document.getElementById('client-bw-tbody');
+
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No clients connected</p></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = clients.map(c => {
+    const rxPct = Math.round(((c.rx_bps || 0) / maxRx) * 100);
+    const txPct = Math.round(((c.tx_bps || 0) / maxTx) * 100);
+    return `<tr>
+      <td><span class="mac">${c.mac}</span></td>
+      <td><span class="ip">—</span></td>
+      <td style="font-family:var(--font-mono);font-size:12px;color:var(--blue);width:80px">${c.rx_human || '0 bps'}</td>
+      <td>
+        <div class="bw-bar-wrap">
+          <div class="bw-bar-track"><div class="bw-bar-fill rx" style="width:${rxPct}%"></div></div>
+        </div>
+      </td>
+      <td style="font-family:var(--font-mono);font-size:12px;color:var(--green);width:80px">${c.tx_human || '0 bps'}</td>
+      <td>
+        <div class="bw-bar-wrap">
+          <div class="bw-bar-track"><div class="bw-bar-fill tx" style="width:${txPct}%"></div></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function doAction(action) {
+  const r = await fetch('/api/action', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const d = await r.json();
+  toast(d.ok ? 'success' : 'error', d.message);
+}
+
+function toast(type, msg) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`; el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+fetch('/api/status').then(r=>r.json()).then(d=>{
+  document.getElementById('status-pill').className = 'status-pill ' + (d.running ? 'running' : 'stopped');
+  document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
+  document.getElementById('footer-version').textContent = `routerd ${d.version||''}`;
+});
+connect();
+</script>
+</body>
+</html>

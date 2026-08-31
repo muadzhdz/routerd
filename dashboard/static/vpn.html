@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>routerd — VPN</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="layout">
+
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
+      </svg>
+      routerd
+    </div>
+    <div class="topbar-right">
+      <span class="status-pill stopped" id="status-pill">
+        <span class="dot"></span><span id="status-text">Loading</span>
+      </span>
+      <button class="btn btn-sm" onclick="doAction('reload')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Reload
+      </button>
+      <button class="btn btn-sm btn-danger" onclick="doAction('stop')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+        </svg>
+        Stop
+      </button>
+    </div>
+  </header>
+
+  <nav class="sidebar">
+    <span class="nav-section">Monitor</span>
+    <a href="/" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+      </svg>
+      Overview
+    </a>
+    <a href="/bandwidth.html" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Bandwidth
+    </a>
+    <a href="/logs.html" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      Logs
+    </a>
+    <span class="nav-section">Manage</span>
+    <a href="/config.html" class="nav-item">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Configuration
+    </a>
+    <a href="/vpn.html" class="nav-item active">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      VPN
+    </a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer" id="footer-version">routerd</div>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <div class="page-title">VPN Manager</div>
+      <div class="page-sub">WireGuard / WARP tunnel status and configuration</div>
+    </div>
+
+    <!-- VPN Status -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Tunnel Status
+        </span>
+        <div class="card-actions">
+          <span id="vpn-badge" class="badge badge-gray">Unknown</span>
+          <button class="btn btn-sm" onclick="doAction('reload')" title="Reload routerd to restart VPN">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Restart VPN
+          </button>
+        </div>
+      </div>
+      <div class="vpn-info" id="vpn-info">
+        <div class="vpn-field">
+          <span class="vpn-field-label">Mode</span>
+          <span class="vpn-field-value" id="vpn-mode">—</span>
+        </div>
+        <div class="vpn-field">
+          <span class="vpn-field-label">Interface</span>
+          <span class="vpn-field-value" id="vpn-iface">—</span>
+        </div>
+        <div class="vpn-field">
+          <span class="vpn-field-label">Endpoint</span>
+          <span class="vpn-field-value" id="vpn-endpoint">—</span>
+        </div>
+        <div class="vpn-field">
+          <span class="vpn-field-label">Latency</span>
+          <span class="vpn-field-value" id="vpn-latency">—</span>
+        </div>
+        <div class="vpn-field">
+          <span class="vpn-field-label">Public Key</span>
+          <span class="vpn-field-value" id="vpn-pubkey" style="font-size:11px;word-break:break-all">—</span>
+        </div>
+        <div class="vpn-field">
+          <span class="vpn-field-label">Last Handshake</span>
+          <span class="vpn-field-value" id="vpn-last-hs">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Config Editor -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          VPN Config Editor
+        </span>
+        <div class="card-actions">
+          <button class="btn btn-sm" onclick="generateWARP()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+            Generate WARP
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="saveConf()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+            </svg>
+            Save Config
+          </button>
+        </div>
+      </div>
+
+      <div class="alert alert-info" style="margin-bottom:16px">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        PrivateKey is shown as [REDACTED] for security. Saving will write to /etc/routerd/vpn.conf. Reload routerd to apply.
+      </div>
+
+      <div class="form-group">
+        <textarea id="vpn-conf-editor" style="min-height:320px" spellcheck="false" placeholder="Loading VPN config..."></textarea>
+      </div>
+    </div>
+
+    <!-- Quick Setup -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          Quick Setup Guide
+        </span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <!-- Method A -->
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span class="badge badge-blue">A</span>
+            Cloudflare WARP (automatic with wgcf)
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+            Click "Generate WARP" above. If <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">wgcf</code> is installed, a real profile is generated automatically. Otherwise install wgcf first:
+          </div>
+          <div class="code-block">pacman -S wgcf
+# or
+go install github.com/ViRb3/wgcf/v2@latest</div>
+        </div>
+
+        <hr class="divider" style="margin:0">
+
+        <!-- Method B -->
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span class="badge badge-gray">B</span>
+            Custom WireGuard VPS / Mullvad / ProtonVPN
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Generate a keypair and paste into the editor above:</div>
+          <div class="code-block">wg genkey | tee privatekey | wg pubkey > publickey
+cat privatekey   # paste as PrivateKey in [Interface]</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:8px">Minimum working config:</div>
+          <div class="code-block">[Interface]
+PrivateKey = &lt;YOUR_PRIVATE_KEY&gt;
+Address = 10.2.0.2/32
+
+[Peer]
+PublicKey = &lt;SERVER_PUBLIC_KEY&gt;
+Endpoint = &lt;SERVER_IP&gt;:51820
+AllowedIPs = 0.0.0.0/0</div>
+        </div>
+
+        <hr class="divider" style="margin:0">
+
+        <!-- Method C -->
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span class="badge badge-gray">C</span>
+            Existing VPN Interface (Tailscale, custom wg0, tun0)
+          </div>
+          <div style="font-size:12px;color:var(--text-muted)">
+            Set <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">VPN_MODE=custom</code> and
+            <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">VPN_INTERFACE=wg0</code> in Configuration.
+            routerd will use that interface as the NAT uplink without managing its lifecycle.
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast-container"></div>
+
+<script>
+async function loadVPN() {
+  const r = await fetch('/api/vpn');
+  const d = await r.json();
+  const badge = document.getElementById('vpn-badge');
+  if (d.active) {
+    badge.className = 'badge badge-green'; badge.textContent = 'Active';
+  } else {
+    badge.className = 'badge badge-red'; badge.textContent = 'Inactive';
+  }
+  setText('vpn-mode', d.mode || '—');
+  setText('vpn-iface', d.interface || '—');
+  setText('vpn-endpoint', d.endpoint || '—');
+  setText('vpn-latency', d.latency || '—');
+  setText('vpn-pubkey', d.public_key || '—');
+  setText('vpn-last-hs', d.last_handshake || '—');
+  if (d.conf_content) document.getElementById('vpn-conf-editor').value = d.conf_content;
+}
+
+async function saveConf() {
+  const content = document.getElementById('vpn-conf-editor').value;
+  const r = await fetch('/api/vpn', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action:'save_conf', content})
+  });
+  const d = await r.json();
+  toast(d.ok ? 'success' : 'error', d.message);
+}
+
+async function generateWARP() {
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  // Trigger warp-setup via action endpoint, then reload page
+  try {
+    // Save current conf with empty content to trigger warp generation on next start
+    toast('info', 'Run: sudo routerd warp-setup — then reload routerd to apply.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Generate WARP`;
+  }
+}
+
+async function doAction(action) {
+  const r = await fetch('/api/action', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const d = await r.json();
+  toast(d.ok ? 'success' : 'error', d.message);
+}
+
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+
+function toast(type, msg) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`; el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+fetch('/api/status').then(r=>r.json()).then(d=>{
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill ' + (d.running ? 'running' : 'stopped');
+  document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
+  document.getElementById('footer-version').textContent = `routerd ${d.version||''}`;
+});
+loadVPN();
+</script>
+</body>
+</html>

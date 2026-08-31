@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"routerd/dashboard"
 )
 
 const version = "0.1.0"
@@ -37,6 +40,7 @@ Commands:
   status      Show the current state of the access point & VPN.
   reload      Regenerate hostapd/dnsmasq configs and restart them (full reload).
   logs        Tail the hostapd and dnsmasq log files.
+  dashboard   Start the web dashboard server (default port: 8080).
   warp-setup  Generate a Cloudflare WARP WireGuard configuration template.
   version     Print the version.
 
@@ -48,6 +52,7 @@ Examples:
   sudo systemctl start routerd
   sudo routerd status
   sudo routerd logs
+  sudo routerd dashboard
   sudo routerd warp-setup
   sudo routerd -c /etc/routerd.conf start`)
 }
@@ -512,6 +517,39 @@ func cmdLogs() {
 	tailFile(dnsmasqLog, "dnsmasq")
 }
 
+func cmdDashboard() {
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
+	bind := cfg.DashboardBind
+	port := cfg.DashboardPort
+	password := cfg.DashboardPassword
+	vpnConf := cfg.VPNConfig
+	if vpnConf == "" {
+		vpnConf = "/etc/routerd/vpn.conf"
+	}
+
+	srv := dashboard.NewServer(configPath, vpnConf, runDir, version, bind, password, port)
+
+	fmt.Printf("routerd dashboard starting on http://%s:%d\n", bind, port)
+	if password == "" {
+		fmt.Println("  auth: disabled (set DASHBOARD_PASSWORD in config to enable)")
+	} else {
+		fmt.Println("  auth: basic auth enabled")
+	}
+	fmt.Println("  press Ctrl+C to stop")
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
+
+	if err := srv.Run(ctx); err != nil && err.Error() != "http: Server closed" {
+		log.Fatalf("dashboard: %v", err)
+	}
+	fmt.Println("dashboard stopped")
+}
+
 func cmdWarpSetup() {
 	target := "/etc/routerd/vpn.conf"
 	logInfo("generating Cloudflare WARP profile template at %s", target)
@@ -667,6 +705,8 @@ func main() {
 		cmdReload()
 	case "logs":
 		cmdLogs()
+	case "dashboard":
+		cmdDashboard()
 	case "warp-setup":
 		cmdWarpSetup()
 	case "version":

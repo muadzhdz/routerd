@@ -37,6 +37,12 @@ type Config struct {
 	VPNDNS        string // forced DNS server for VPN mode (default: 1.1.1.1)
 	WPA3          bool   // enable WPA3-SAE support in hostapd config
 	DPIBypass     bool   // internal: set by dpibypass VPN mode — enables MSS clamping without VPN rules
+
+	// Dashboard settings
+	DashboardEnabled  bool   // enable the web dashboard server
+	DashboardPort     int    // HTTP port for the dashboard (default: 8080)
+	DashboardPassword string // basic auth password; empty = no auth (AP-subnet only)
+	DashboardBind     string // bind address (default: 0.0.0.0)
 }
 
 // DefaultConfig returns a Config populated with safe default values.
@@ -66,6 +72,11 @@ func DefaultConfig() *Config {
 		VPNKillSwitch: true,
 		VPNDNS:        "1.1.1.1",
 		WPA3:          false,
+
+		DashboardEnabled:  false,
+		DashboardPort:     8080,
+		DashboardPassword: "",
+		DashboardBind:     "0.0.0.0",
 	}
 }
 
@@ -174,6 +185,16 @@ func LoadConfig(path string) (*Config, error) {
 			cfg.VPNDNS = val
 		case "WPA3":
 			cfg.WPA3 = parseBool(val)
+		case "DASHBOARD_ENABLED":
+			cfg.DashboardEnabled = parseBool(val)
+		case "DASHBOARD_PORT":
+			if n, err := strconv.Atoi(val); err == nil && n > 0 && n < 65536 {
+				cfg.DashboardPort = n
+			}
+		case "DASHBOARD_PASSWORD":
+			cfg.DashboardPassword = val
+		case "DASHBOARD_BIND":
+			cfg.DashboardBind = val
 		}
 	}
 	if err := sc.Err(); err != nil {
