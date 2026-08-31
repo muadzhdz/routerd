@@ -57,7 +57,7 @@ iface_exists() {
 }
 
 hwsim_loaded() {
-    lsmod | grep -q "^${HWSIM_MODULE}"
+    lsmod | grep -q "mac80211_hwsim"
 }
 
 # ── Command: deps ─────────────────────────────────────────────────────────────
