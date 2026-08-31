@@ -136,7 +136,7 @@ input, textarea, select { font-family: inherit; }
   grid-area: sidebar;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 20px 10px;
+  padding: 20px 10px 20px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -190,8 +190,9 @@ a.nav-item[href="/auth/logout"] {
   color: var(--text-dim);
   border-top: 1px solid var(--border);
   margin-top: 16px;
-  padding-top: 16px;
-  margin-bottom: 10px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+  margin-bottom: 0;
   border-radius: var(--radius);
 }
 a.nav-item[href="/auth/logout"]:hover {
