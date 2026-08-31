@@ -23,6 +23,19 @@ func runCmd(name string, args ...string) (string, error) {
 	return out.String(), nil
 }
 
+// runCmdDir runs a command in the specified working directory.
+func runCmdDir(dir, name string, args ...string) (string, error) {
+	var out bytes.Buffer
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return out.String(), err
+	}
+	return out.String(), nil
+}
+
 func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil

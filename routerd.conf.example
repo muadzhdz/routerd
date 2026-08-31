@@ -83,5 +83,14 @@ VPN_INTERFACE=wg0
 # VPN Kill-Switch: block client internet access if VPN connection drops
 VPN_KILL_SWITCH=true
 
+# Forced DNS server for VPN mode — all client DNS queries are redirected here
+# inside the VPN tunnel to bypass ISP DNS hijacking. Default: 1.1.1.1 (Cloudflare)
+# Change to your VPN provider's DNS: e.g. 10.64.0.1 (Mullvad), 10.2.0.1 (custom WG)
+VPN_DNS=1.1.1.1
+
+# Enable WPA3-SAE with WPA2-PSK transition mode (backward compatible).
+# Requires hostapd >= 2.9 and a driver that supports ieee80211w.
+WPA3=false
+
 
 

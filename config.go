@@ -22,10 +22,10 @@ type Config struct {
 	Country       string
 	MaxClients    int
 	DNS           string
-	RandomMAC     bool // generate cryptographically random MAC for AP interface
-	IsolateHost   bool // block connected AP clients from accessing local host services
-	SpoofTTL      int  // set outgoing TTL (e.g. 64) to hide tethering, 0 to disable
-	TorMode       bool // transparently proxy TCP & DNS traffic via Tor
+	RandomMAC     bool   // generate cryptographically random MAC for AP interface
+	IsolateHost   bool   // block connected AP clients from accessing local host services
+	SpoofTTL      int    // set outgoing TTL (e.g. 64) to hide tethering, 0 to disable
+	TorMode       bool   // transparently proxy TCP & DNS traffic via Tor
 	DisableIPv6   bool   // disable IPv6 on AP interface & block IPv6 traffic to prevent leaks
 	HideSSID      bool   // hide SSID broadcast (hidden AP network)
 	LimitRateMbps int    // rate limit bandwidth on AP interface in Mbps, 0 to disable
@@ -34,8 +34,12 @@ type Config struct {
 	VPNConfig     string // path to WireGuard profile (.conf)
 	VPNInterface  string // VPN interface name (e.g. wg0, tun0)
 	VPNKillSwitch bool   // block client traffic if VPN connection fails/drops
+	VPNDNS        string // forced DNS server for VPN mode (default: 1.1.1.1)
+	WPA3          bool   // enable WPA3-SAE support in hostapd config
+	DPIBypass     bool   // internal: set by dpibypass VPN mode — enables MSS clamping without VPN rules
 }
 
+// DefaultConfig returns a Config populated with safe default values.
 func DefaultConfig() *Config {
 	return &Config{
 		SSID:          "routerd",
@@ -60,12 +64,31 @@ func DefaultConfig() *Config {
 		VPNConfig:     "/etc/routerd/vpn.conf",
 		VPNInterface:  "wg0",
 		VPNKillSwitch: true,
+		VPNDNS:        "1.1.1.1",
+		WPA3:          false,
 	}
 }
 
+// parseBool converts common truthy/falsy strings to bool.
 func parseBool(s string) bool {
 	v := strings.ToLower(strings.TrimSpace(s))
 	return v == "true" || v == "1" || v == "yes" || v == "on"
+}
+
+// sanitizeSSID strips characters that are illegal or dangerous inside a
+// hostapd.conf value: newlines, carriage returns, null bytes, and the '='
+// sign (which would break the key=value parser).
+func sanitizeSSID(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '\n', '\r', '\x00', '=':
+			// drop
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // LoadConfig reads the KEY=VALUE config file. Missing files fall back to
@@ -98,7 +121,7 @@ func LoadConfig(path string) (*Config, error) {
 		val = strings.Trim(strings.TrimSpace(val), `"'`)
 		switch key {
 		case "SSID":
-			cfg.SSID = val
+			cfg.SSID = sanitizeSSID(val)
 		case "PASSWORD":
 			cfg.Password = val
 		case "CHANNEL":
@@ -147,6 +170,10 @@ func LoadConfig(path string) (*Config, error) {
 			cfg.VPNInterface = val
 		case "VPN_KILL_SWITCH":
 			cfg.VPNKillSwitch = parseBool(val)
+		case "VPN_DNS":
+			cfg.VPNDNS = val
+		case "WPA3":
+			cfg.WPA3 = parseBool(val)
 		}
 	}
 	if err := sc.Err(); err != nil {
