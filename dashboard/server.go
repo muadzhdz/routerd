@@ -24,10 +24,11 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
 // --- Session store ----------------------------------------------------------
 
 const sessionCookieName = "routerd_session"
-const sessionDuration   = 24 * time.Hour
+const sessionDuration = 24 * time.Hour
 
 type sessionStore struct {
 	mu       sync.RWMutex
@@ -77,6 +78,75 @@ func (s *sessionStore) cleanup() {
 	}
 }
 
+// --- Rate limiter (brute force protection) ----------------------------------
+
+// loginLimiter tracks failed login attempts per IP.
+type loginLimiter struct {
+	mu       sync.Mutex
+	attempts map[string]*loginAttempt
+}
+
+type loginAttempt struct {
+	count       int
+	lockedUntil time.Time
+}
+
+const (
+	maxLoginAttempts = 5
+	lockoutDuration  = 5 * time.Minute
+)
+
+func newLoginLimiter() *loginLimiter {
+	l := &loginLimiter{attempts: make(map[string]*loginAttempt)}
+	go l.cleanup()
+	return l
+}
+
+func (l *loginLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	a, ok := l.attempts[ip]
+	if !ok {
+		return true
+	}
+	if time.Now().Before(a.lockedUntil) {
+		return false
+	}
+	return true
+}
+
+func (l *loginLimiter) record(ip string, success bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if success {
+		delete(l.attempts, ip)
+		return
+	}
+	a, ok := l.attempts[ip]
+	if !ok {
+		a = &loginAttempt{}
+		l.attempts[ip] = a
+	}
+	a.count++
+	if a.count >= maxLoginAttempts {
+		a.lockedUntil = time.Now().Add(lockoutDuration)
+	}
+}
+
+func (l *loginLimiter) cleanup() {
+	t := time.NewTicker(10 * time.Minute)
+	for range t.C {
+		l.mu.Lock()
+		now := time.Now()
+		for ip, a := range l.attempts {
+			if a.count < maxLoginAttempts || now.After(a.lockedUntil.Add(lockoutDuration)) {
+				delete(l.attempts, ip)
+			}
+		}
+		l.mu.Unlock()
+	}
+}
+
 // Server is the dashboard HTTP server.
 type Server struct {
 	configPath  string
@@ -89,6 +159,7 @@ type Server struct {
 
 	hub      *wsHub
 	sessions *sessionStore
+	limiter  *loginLimiter
 }
 
 // NewServer constructs a Server from the provided parameters.
@@ -103,6 +174,7 @@ func NewServer(configPath, vpnConfPath, runDir, version, bind, password string, 
 		port:        port,
 		hub:         newWSHub(),
 		sessions:    newSessionStore(),
+		limiter:     newLoginLimiter(),
 	}
 }
 
@@ -111,7 +183,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	// Auth endpoints (always public).
-	mux.HandleFunc("/auth/login",  s.handleAuthLogin)
+	mux.HandleFunc("/auth/login", s.handleAuthLogin)
 	mux.HandleFunc("/auth/logout", s.handleAuthLogout)
 
 	// Static files (embedded).
@@ -158,9 +230,9 @@ func (s *Server) Run(ctx context.Context) error {
 
 // publicPaths are always accessible without authentication.
 var publicPaths = map[string]bool{
-	"/login.html":   true,
-	"/auth/login":   true,
-	"/style.css":    true,
+	"/login.html": true,
+	"/auth/login": true,
+	"/style.css":  true,
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
@@ -204,6 +276,24 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Rate limiting: extract real IP (handle reverse proxy)
+	ip := r.RemoteAddr
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		ip = strings.SplitN(xff, ",", 2)[0]
+	}
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+
+	if !s.limiter.allow(ip) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", "300")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"ok":false,"message":"Too many failed attempts. Try again in 5 minutes."}`))
+		return
+	}
+
 	var body struct {
 		Password string `json:"password"`
 	}
@@ -212,10 +302,13 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(body.Password), []byte(s.password)) != 1 {
+		s.limiter.record(ip, false)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"ok":false,"message":"Invalid password"}`))
 		return
 	}
+	s.limiter.record(ip, true)
 	token := s.sessions.create()
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -247,9 +340,18 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		// Only allow same-origin requests — no wildcard CORS for dashboard API.
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			// Allow if origin matches the host of this server.
+			host := r.Host
+			if origin == "http://"+host || origin == "https://"+host {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Vary", "Origin")
+			}
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -314,7 +416,15 @@ func (h *wsHub) broadcast(v any) {
 }
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(_ *http.Request) bool { return true },
+	// Only allow WebSocket upgrades from the same host (prevents CSRF via WS).
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // direct/same-origin request
+		}
+		host := r.Host
+		return origin == "http://"+host || origin == "https://"+host
+	},
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {

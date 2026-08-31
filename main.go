@@ -318,7 +318,7 @@ func cmdStart() {
 		cfg.RandomMAC, cfg.IsolateHost, cfg.EnableVPN, cfg.VPNMode, cfg.VPNKillSwitch, cfg.VPNDNS)
 
 	// Start watchdogs that trigger a graceful shutdown if hostapd or dnsmasq crash.
-	sig := make(chan os.Signal, 1)
+	sig := make(chan os.Signal, 2)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 
 	procMgr.watchdog("hostapd", func(name string) {
@@ -613,7 +613,7 @@ func writeClients(ap, runDir string) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(filepath.Join(runDir, "clients.json"), b, 0644)
+	_ = os.WriteFile(filepath.Join(runDir, "clients.json"), b, 0600)
 }
 
 func cmdDashboard() {

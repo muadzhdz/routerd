@@ -83,7 +83,6 @@
       VPN
     </a>
     <div class="sidebar-spacer"></div>
-    <div class="sidebar-footer" id="footer-version">routerd</div>
   </nav>
 
   <main class="main">
@@ -433,7 +432,6 @@ fetch('/api/status').then(r=>r.json()).then(d=>{
   const pill = document.getElementById('status-pill');
   pill.className = 'status-pill ' + (d.running ? 'running' : 'stopped');
   document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
-  document.getElementById('footer-version').textContent = `routerd ${d.version||''}`;
 });
 loadConfig();
 </script>

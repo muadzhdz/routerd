@@ -89,7 +89,6 @@
       VPN
     </a>
     <div class="sidebar-spacer"></div>
-    <div class="sidebar-footer" id="footer-version">routerd</div>
   </nav>
 
   <main class="main">
@@ -310,7 +309,6 @@ fetch('/api/status').then(r => r.json()).then(d => {
   document.getElementById('stat-channel').textContent = d.channel ? `Ch ${d.channel} · ${(d.band||'').toUpperCase()} band` : '—';
   document.getElementById('stat-subnet').textContent  = d.subnet || '—';
   document.getElementById('stat-iface').textContent   = d.ap_interface ? `${d.ap_interface} → ${d.sta_interface}` : '—';
-  document.getElementById('footer-version').textContent = `routerd ${d.version || ''}`.trim();
 });
 
 connect();

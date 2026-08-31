@@ -78,7 +78,6 @@
       VPN
     </a>
     <div class="sidebar-spacer"></div>
-    <div class="sidebar-footer" id="footer-version">routerd</div>
   </nav>
 
   <main class="main">
@@ -333,7 +332,6 @@ async function doAction(action) {
 fetch('/api/status').then(r=>r.json()).then(d=>{
   document.getElementById('status-pill').className = 'status-pill ' + (d.running ? 'running' : 'stopped');
   document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
-  document.getElementById('footer-version').textContent = `routerd ${d.version||''}`;
 });
 connect();
 </script>
