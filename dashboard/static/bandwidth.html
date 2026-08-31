@@ -83,75 +83,73 @@
 
   <main class="main">
     <div class="page-content">
-<div class="page-sub">Real-time per-client traffic via AP interface counters</div>
-    </div>
-
-    <!-- Total stats -->
-    <div class="stats-grid">
+      <!-- Total stats -->
+      <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label" style="color:var(--blue)">
-          <svg width="12" height="12" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-          </svg>
-          Total Download
-        </div>
-        <div class="stat-value" id="total-rx" style="color:var(--blue)">—</div>
-        <div class="stat-sub">incoming to AP clients</div>
+      <div class="stat-label" style="color:var(--blue)">
+      <svg width="12" height="12" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24">
+      <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+      </svg>
+      Total Download
+      </div>
+      <div class="stat-value" id="total-rx" style="color:var(--blue)">—</div>
+      <div class="stat-sub">incoming to AP clients</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label" style="color:var(--green)">
-          <svg width="12" height="12" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24">
-            <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-          </svg>
-          Total Upload
-        </div>
-        <div class="stat-value" id="total-tx" style="color:var(--green)">—</div>
-        <div class="stat-sub">outgoing from AP clients</div>
+      <div class="stat-label" style="color:var(--green)">
+      <svg width="12" height="12" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24">
+      <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+      </svg>
+      Total Upload
       </div>
-    </div>
+      <div class="stat-value" id="total-tx" style="color:var(--green)">—</div>
+      <div class="stat-sub">outgoing from AP clients</div>
+      </div>
+      </div>
 
-    <!-- Chart -->
-    <div class="card" style="animation-delay:0ms">
+      <!-- Chart -->
+      <div class="card" style="animation-delay:0ms">
       <div class="card-header">
-        <span class="card-title">60-Second Traffic History</span>
-        <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
-          <span style="display:flex;align-items:center;gap:5px">
-            <span style="width:10px;height:2px;background:var(--blue);display:inline-block;border-radius:1px"></span>
-            Download
-          </span>
-          <span style="display:flex;align-items:center;gap:5px">
-            <span style="width:10px;height:2px;background:var(--green);display:inline-block;border-radius:1px"></span>
-            Upload
-          </span>
-        </div>
+      <span class="card-title">60-Second Traffic History</span>
+      <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
+      <span style="display:flex;align-items:center;gap:5px">
+      <span style="width:10px;height:2px;background:var(--blue);display:inline-block;border-radius:1px"></span>
+      Download
+      </span>
+      <span style="display:flex;align-items:center;gap:5px">
+      <span style="width:10px;height:2px;background:var(--green);display:inline-block;border-radius:1px"></span>
+      Upload
+      </span>
+      </div>
       </div>
       <div class="chart-wrap">
-        <canvas id="bw-chart"></canvas>
+      <canvas id="bw-chart"></canvas>
       </div>
-    </div>
+      </div>
 
-    <!-- Per-client -->
-    <div class="card" style="animation-delay:60ms">
+      <!-- Per-client -->
+      <div class="card" style="animation-delay:60ms">
       <div class="card-header">
-        <span class="card-title">Per-Client Breakdown</span>
-        <span class="badge badge-gray" id="client-bw-count">0 clients</span>
+      <span class="card-title">Per-Client Breakdown</span>
+      <span class="badge badge-gray" id="client-bw-count">0 clients</span>
       </div>
       <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>MAC</th>
-              <th>IP</th>
-              <th>Download</th>
-              <th style="min-width:140px"></th>
-              <th>Upload</th>
-              <th style="min-width:140px"></th>
-            </tr>
-          </thead>
-          <tbody id="client-bw-tbody">
-            <tr><td colspan="6"><div class="empty-state"><p>No clients connected</p></div></td></tr>
-          </tbody>
-        </table>
+      <table>
+      <thead>
+      <tr>
+      <th>MAC</th>
+      <th>IP</th>
+      <th>Download</th>
+      <th style="min-width:140px"></th>
+      <th>Upload</th>
+      <th style="min-width:140px"></th>
+      </tr>
+      </thead>
+      <tbody id="client-bw-tbody">
+      <tr><td colspan="6"><div class="empty-state"><p>No clients connected</p></div></td></tr>
+      </tbody>
+      </table>
+      </div>
       </div>
     </div>
     </div>

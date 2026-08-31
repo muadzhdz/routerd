@@ -88,228 +88,226 @@
 
   <main class="main">
     <div class="page-content">
-<div class="page-sub">Edit and apply routerd settings — changes take effect after reload</div>
-    </div>
+      <div id="alert-area"></div>
 
-    <div id="alert-area"></div>
-
-    <!-- Visual editor -->
-    <div class="card" style="animation-delay:0ms">
+      <!-- Visual editor -->
+      <div class="card" style="animation-delay:0ms">
       <div class="card-header">
-        <span class="card-title">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
-          </svg>
-          Access Point
-        </span>
+      <span class="card-title">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
+      </svg>
+      Access Point
+      </span>
       </div>
       <div class="form-grid">
-        <div class="form-group">
-          <label>SSID</label>
-          <input type="text" id="f-ssid" placeholder="routerd">
-        </div>
-        <div class="form-group">
-          <label>Password (WPA2, 8-63 chars, empty = open)</label>
-          <input type="password" id="f-password" placeholder="Leave empty for open network">
-        </div>
-        <div class="form-group">
-          <label>Channel</label>
-          <select id="f-channel">
-            <option value="auto">auto (follow active connection)</option>
-            <option value="1">1 (2.4 GHz)</option><option value="6">6 (2.4 GHz)</option>
-            <option value="11">11 (2.4 GHz)</option><option value="36">36 (5 GHz)</option>
-            <option value="40">40 (5 GHz)</option><option value="44">44 (5 GHz)</option>
-            <option value="48">48 (5 GHz)</option><option value="149">149 (5 GHz)</option>
-            <option value="153">153 (5 GHz)</option><option value="157">157 (5 GHz)</option>
-            <option value="161">161 (5 GHz)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Country Code (ISO 3166-1)</label>
-          <input type="text" id="f-country" placeholder="ID" maxlength="2">
-        </div>
-        <div class="form-group">
-          <label>Max Clients</label>
-          <input type="number" id="f-max-clients" min="1" max="128" placeholder="16">
-        </div>
-        <div class="form-group">
-          <label>Subnet (CIDR or "random")</label>
-          <input type="text" id="f-subnet" placeholder="random">
-        </div>
-        <div class="form-group">
-          <label>DNS Server</label>
-          <input type="text" id="f-dns" placeholder="127.0.0.53">
-        </div>
-        <div class="form-group">
-          <label>Rate Limit (Mbps, 0 = unlimited)</label>
-          <input type="number" id="f-limit-rate" min="0" placeholder="0">
-        </div>
+      <div class="form-group">
+      <label>SSID</label>
+      <input type="text" id="f-ssid" placeholder="routerd">
+      </div>
+      <div class="form-group">
+      <label>Password (WPA2, 8-63 chars, empty = open)</label>
+      <input type="password" id="f-password" placeholder="Leave empty for open network">
+      </div>
+      <div class="form-group">
+      <label>Channel</label>
+      <select id="f-channel">
+      <option value="auto">auto (follow active connection)</option>
+      <option value="1">1 (2.4 GHz)</option><option value="6">6 (2.4 GHz)</option>
+      <option value="11">11 (2.4 GHz)</option><option value="36">36 (5 GHz)</option>
+      <option value="40">40 (5 GHz)</option><option value="44">44 (5 GHz)</option>
+      <option value="48">48 (5 GHz)</option><option value="149">149 (5 GHz)</option>
+      <option value="153">153 (5 GHz)</option><option value="157">157 (5 GHz)</option>
+      <option value="161">161 (5 GHz)</option>
+      </select>
+      </div>
+      <div class="form-group">
+      <label>Country Code (ISO 3166-1)</label>
+      <input type="text" id="f-country" placeholder="ID" maxlength="2">
+      </div>
+      <div class="form-group">
+      <label>Max Clients</label>
+      <input type="number" id="f-max-clients" min="1" max="128" placeholder="16">
+      </div>
+      <div class="form-group">
+      <label>Subnet (CIDR or "random")</label>
+      <input type="text" id="f-subnet" placeholder="random">
+      </div>
+      <div class="form-group">
+      <label>DNS Server</label>
+      <input type="text" id="f-dns" placeholder="127.0.0.53">
+      </div>
+      <div class="form-group">
+      <label>Rate Limit (Mbps, 0 = unlimited)</label>
+      <input type="number" id="f-limit-rate" min="0" placeholder="0">
+      </div>
       </div>
 
       <hr class="divider">
       <div class="card-title" style="margin-bottom:12px">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        Security &amp; Stealth
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      Security &amp; Stealth
       </div>
       <div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Random MAC Address</div><div class="toggle-desc">Generate a new random MAC for the AP interface on every start</div></div>
-          <label class="toggle"><input type="checkbox" id="f-random-mac"><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Isolate Host</div><div class="toggle-desc">Block AP clients from scanning or accessing host services</div></div>
-          <label class="toggle"><input type="checkbox" id="f-isolate-host"><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Disable IPv6</div><div class="toggle-desc">Block IPv6 on AP interface to prevent leaks</div></div>
-          <label class="toggle"><input type="checkbox" id="f-disable-ipv6"><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Hide SSID</div><div class="toggle-desc">Do not broadcast SSID (hidden network mode)</div></div>
-          <label class="toggle"><input type="checkbox" id="f-hide-ssid"><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Tor Mode</div><div class="toggle-desc">Transparently proxy all TCP and DNS traffic through Tor</div></div>
-          <label class="toggle"><input type="checkbox" id="f-tor-mode"><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">WPA3 (SAE/WPA2 transition)</div><div class="toggle-desc">Enable WPA3-SAE with WPA2-PSK fallback — requires hostapd 2.9+</div></div>
-          <label class="toggle"><input type="checkbox" id="f-wpa3"><span class="toggle-track"></span></label>
-        </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Random MAC Address</div><div class="toggle-desc">Generate a new random MAC for the AP interface on every start</div></div>
+      <label class="toggle"><input type="checkbox" id="f-random-mac"><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Isolate Host</div><div class="toggle-desc">Block AP clients from scanning or accessing host services</div></div>
+      <label class="toggle"><input type="checkbox" id="f-isolate-host"><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Disable IPv6</div><div class="toggle-desc">Block IPv6 on AP interface to prevent leaks</div></div>
+      <label class="toggle"><input type="checkbox" id="f-disable-ipv6"><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Hide SSID</div><div class="toggle-desc">Do not broadcast SSID (hidden network mode)</div></div>
+      <label class="toggle"><input type="checkbox" id="f-hide-ssid"><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Tor Mode</div><div class="toggle-desc">Transparently proxy all TCP and DNS traffic through Tor</div></div>
+      <label class="toggle"><input type="checkbox" id="f-tor-mode"><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">WPA3 (SAE/WPA2 transition)</div><div class="toggle-desc">Enable WPA3-SAE with WPA2-PSK fallback — requires hostapd 2.9+</div></div>
+      <label class="toggle"><input type="checkbox" id="f-wpa3"><span class="toggle-track"></span></label>
+      </div>
       </div>
       <div class="form-grid" style="margin-top:16px">
-        <div class="form-group">
-          <label>TTL Spoof (0 = disabled)</label>
-          <input type="number" id="f-spoof-ttl" min="0" max="255" placeholder="64">
-        </div>
+      <div class="form-group">
+      <label>TTL Spoof (0 = disabled)</label>
+      <input type="number" id="f-spoof-ttl" min="0" max="255" placeholder="64">
+      </div>
       </div>
 
       <hr class="divider">
       <div class="card-title" style="margin-bottom:12px">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-          <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
-          <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
-        </svg>
-        Interfaces
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+      </svg>
+      Interfaces
       </div>
       <div class="form-grid">
-        <div class="form-group">
-          <label>STA Interface (uplink WiFi)</label>
-          <input type="text" id="f-iface-sta" placeholder="auto">
-        </div>
-        <div class="form-group">
-          <label>AP Interface</label>
-          <input type="text" id="f-iface-ap" placeholder="ap0">
-        </div>
-        <div class="form-group">
-          <label>NAT Uplink</label>
-          <input type="text" id="f-uplink" placeholder="auto">
-        </div>
+      <div class="form-group">
+      <label>STA Interface (uplink WiFi)</label>
+      <input type="text" id="f-iface-sta" placeholder="auto">
+      </div>
+      <div class="form-group">
+      <label>AP Interface</label>
+      <input type="text" id="f-iface-ap" placeholder="ap0">
+      </div>
+      <div class="form-group">
+      <label>NAT Uplink</label>
+      <input type="text" id="f-uplink" placeholder="auto">
+      </div>
       </div>
 
       <hr class="divider">
       <div class="card-title" style="margin-bottom:12px">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        VPN Gateway
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      VPN Gateway
       </div>
       <div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Enable VPN</div><div class="toggle-desc">Route all AP client traffic through the VPN tunnel</div></div>
-          <label class="toggle"><input type="checkbox" id="f-enable-vpn"><span class="toggle-track"></span></label>
-        </div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">VPN Kill Switch</div><div class="toggle-desc">Block client internet access if VPN drops</div></div>
-          <label class="toggle"><input type="checkbox" id="f-vpn-kill-switch"><span class="toggle-track"></span></label>
-        </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Enable VPN</div><div class="toggle-desc">Route all AP client traffic through the VPN tunnel</div></div>
+      <label class="toggle"><input type="checkbox" id="f-enable-vpn"><span class="toggle-track"></span></label>
+      </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">VPN Kill Switch</div><div class="toggle-desc">Block client internet access if VPN drops</div></div>
+      <label class="toggle"><input type="checkbox" id="f-vpn-kill-switch"><span class="toggle-track"></span></label>
+      </div>
       </div>
       <div class="form-grid" style="margin-top:16px">
-        <div class="form-group">
-          <label>VPN Mode</label>
-          <select id="f-vpn-mode">
-            <option value="wireguard">wireguard</option>
-            <option value="warp">warp (Cloudflare)</option>
-            <option value="custom">custom (existing interface)</option>
-            <option value="dpibypass">dpibypass</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>VPN Config Path</label>
-          <input type="text" id="f-vpn-config" placeholder="/etc/routerd/vpn.conf">
-        </div>
-        <div class="form-group">
-          <label>VPN Interface</label>
-          <input type="text" id="f-vpn-iface" placeholder="wg0">
-        </div>
-        <div class="form-group">
-          <label>VPN DNS</label>
-          <input type="text" id="f-vpn-dns" placeholder="1.1.1.1">
-        </div>
+      <div class="form-group">
+      <label>VPN Mode</label>
+      <select id="f-vpn-mode">
+      <option value="wireguard">wireguard</option>
+      <option value="warp">warp (Cloudflare)</option>
+      <option value="custom">custom (existing interface)</option>
+      <option value="dpibypass">dpibypass</option>
+      </select>
+      </div>
+      <div class="form-group">
+      <label>VPN Config Path</label>
+      <input type="text" id="f-vpn-config" placeholder="/etc/routerd/vpn.conf">
+      </div>
+      <div class="form-group">
+      <label>VPN Interface</label>
+      <input type="text" id="f-vpn-iface" placeholder="wg0">
+      </div>
+      <div class="form-group">
+      <label>VPN DNS</label>
+      <input type="text" id="f-vpn-dns" placeholder="1.1.1.1">
+      </div>
       </div>
 
       <hr class="divider">
       <div class="card-title" style="margin-bottom:12px">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
-        </svg>
-        Dashboard
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+      </svg>
+      Dashboard
       </div>
       <div>
-        <div class="toggle-row">
-          <div><div class="toggle-label">Enable Dashboard</div><div class="toggle-desc">Start the web dashboard on next routerd start</div></div>
-          <label class="toggle"><input type="checkbox" id="f-dashboard-enabled"><span class="toggle-track"></span></label>
-        </div>
+      <div class="toggle-row">
+      <div><div class="toggle-label">Enable Dashboard</div><div class="toggle-desc">Start the web dashboard on next routerd start</div></div>
+      <label class="toggle"><input type="checkbox" id="f-dashboard-enabled"><span class="toggle-track"></span></label>
+      </div>
       </div>
       <div class="form-grid" style="margin-top:16px">
-        <div class="form-group">
-          <label>Dashboard Port</label>
-          <input type="number" id="f-dashboard-port" min="1" max="65535" placeholder="8080">
-        </div>
-        <div class="form-group">
-          <label>Bind Address</label>
-          <input type="text" id="f-dashboard-bind" placeholder="0.0.0.0">
-        </div>
-        <div class="form-group">
-          <label>Dashboard Password (empty = no auth)</label>
-          <input type="password" id="f-dashboard-password" placeholder="Leave empty for no authentication">
-        </div>
+      <div class="form-group">
+      <label>Dashboard Port</label>
+      <input type="number" id="f-dashboard-port" min="1" max="65535" placeholder="8080">
+      </div>
+      <div class="form-group">
+      <label>Bind Address</label>
+      <input type="text" id="f-dashboard-bind" placeholder="0.0.0.0">
+      </div>
+      <div class="form-group">
+      <label>Dashboard Password (empty = no auth)</label>
+      <input type="password" id="f-dashboard-password" placeholder="Leave empty for no authentication">
+      </div>
       </div>
 
       <hr class="divider">
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="saveAndReload()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-          </svg>
-          Save &amp; Reload
-        </button>
-        <button class="btn" onclick="saveOnly()">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-          </svg>
-          Save Only
-        </button>
-        <button class="btn" onclick="resetForm()" style="margin-left:auto">Reset to Loaded</button>
+      <button class="btn btn-primary" onclick="saveAndReload()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      Save &amp; Reload
+      </button>
+      <button class="btn" onclick="saveOnly()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+      </svg>
+      Save Only
+      </button>
+      <button class="btn" onclick="resetForm()" style="margin-left:auto">Reset to Loaded</button>
       </div>
-    </div>
+      </div>
 
-    <!-- Raw editor -->
-    <div class="card" style="animation-delay:60ms" style="margin-top:16px">
+      <!-- Raw editor -->
+      <div class="card" style="animation-delay:60ms" style="margin-top:16px">
       <div class="card-header">
-        <span class="card-title">Raw Config Editor</span>
-        <button class="btn btn-sm" onclick="saveRaw()">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-          </svg>
-          Save Raw
-        </button>
+      <span class="card-title">Raw Config Editor</span>
+      <button class="btn btn-sm" onclick="saveRaw()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      </svg>
+      Save Raw
+      </button>
       </div>
       <div class="form-group">
-        <textarea id="raw-config" style="min-height:280px;font-size:12px" spellcheck="false"></textarea>
+      <textarea id="raw-config" style="min-height:280px;font-size:12px" spellcheck="false"></textarea>
+      </div>
       </div>
     </div>
     </div>

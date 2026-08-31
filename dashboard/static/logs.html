@@ -89,45 +89,43 @@
 
   <main class="main">
     <div class="page-content">
-<div class="page-sub">Real-time output from hostapd and dnsmasq</div>
-    </div>
-
-    <div class="card" style="animation-delay:0ms">
+      <div class="card" style="animation-delay:0ms">
       <div class="log-controls">
-        <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
-        <button class="filter-btn" id="filter-hostapd" onclick="setFilter('hostapd')">
-          <svg width="10" height="10" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:3px">
-            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="var(--blue)"/>
-          </svg>
-          hostapd
-        </button>
-        <button class="filter-btn" id="filter-dnsmasq" onclick="setFilter('dnsmasq')">
-          <svg width="10" height="10" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:3px">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-          dnsmasq
-        </button>
-        <button class="btn btn-sm" onclick="clearLogs()">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            <path d="M10 11v6"/><path d="M14 11v6"/>
-          </svg>
-          Clear
-        </button>
-        <button class="btn btn-sm" id="btn-pause" onclick="togglePause()">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="pause-icon">
-            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-          </svg>
-          Pause
-        </button>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;margin-left:4px">
-          <input type="checkbox" id="autoscroll" checked style="width:13px;height:13px;accent-color:var(--accent)">
-          Auto-scroll
-        </label>
-        <span class="log-count" id="log-count">0 lines</span>
+      <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
+      <button class="filter-btn" id="filter-hostapd" onclick="setFilter('hostapd')">
+      <svg width="10" height="10" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:3px">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="var(--blue)"/>
+      </svg>
+      hostapd
+      </button>
+      <button class="filter-btn" id="filter-dnsmasq" onclick="setFilter('dnsmasq')">
+      <svg width="10" height="10" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:3px">
+      <circle cx="12" cy="12" r="10"/>
+      </svg>
+      dnsmasq
+      </button>
+      <button class="btn btn-sm" onclick="clearLogs()">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/><path d="M14 11v6"/>
+      </svg>
+      Clear
+      </button>
+      <button class="btn btn-sm" id="btn-pause" onclick="togglePause()">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="pause-icon">
+      <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+      </svg>
+      Pause
+      </button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;margin-left:4px">
+      <input type="checkbox" id="autoscroll" checked style="width:13px;height:13px;accent-color:var(--accent)">
+      Auto-scroll
+      </label>
+      <span class="log-count" id="log-count">0 lines</span>
       </div>
 
       <div class="log-wrap" id="log-output"></div>
+      </div>
     </div>
     </div>
   </main>

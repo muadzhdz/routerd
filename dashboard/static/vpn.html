@@ -88,158 +88,156 @@
 
   <main class="main">
     <div class="page-content">
-<div class="page-sub">WireGuard / WARP tunnel status and configuration</div>
-    </div>
-
-    <!-- VPN Status -->
-    <div class="card" style="animation-delay:0ms">
+      <!-- VPN Status -->
+      <div class="card" style="animation-delay:0ms">
       <div class="card-header">
-        <span class="card-title">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          Tunnel Status
-        </span>
-        <div class="card-actions">
-          <span id="vpn-badge" class="badge badge-gray">Unknown</span>
-          <button class="btn btn-sm" onclick="doAction('reload')" title="Reload routerd to restart VPN">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            Restart VPN
-          </button>
-        </div>
+      <span class="card-title">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      Tunnel Status
+      </span>
+      <div class="card-actions">
+      <span id="vpn-badge" class="badge badge-gray">Unknown</span>
+      <button class="btn btn-sm" onclick="doAction('reload')" title="Reload routerd to restart VPN">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      Restart VPN
+      </button>
+      </div>
       </div>
       <div class="vpn-info" id="vpn-info">
-        <div class="vpn-field">
-          <span class="vpn-field-label">Mode</span>
-          <span class="vpn-field-value" id="vpn-mode">—</span>
-        </div>
-        <div class="vpn-field">
-          <span class="vpn-field-label">Interface</span>
-          <span class="vpn-field-value" id="vpn-iface">—</span>
-        </div>
-        <div class="vpn-field">
-          <span class="vpn-field-label">Endpoint</span>
-          <span class="vpn-field-value" id="vpn-endpoint">—</span>
-        </div>
-        <div class="vpn-field">
-          <span class="vpn-field-label">Latency</span>
-          <span class="vpn-field-value" id="vpn-latency">—</span>
-        </div>
-        <div class="vpn-field">
-          <span class="vpn-field-label">Public Key</span>
-          <span class="vpn-field-value" id="vpn-pubkey" style="font-size:11px;word-break:break-all">—</span>
-        </div>
-        <div class="vpn-field">
-          <span class="vpn-field-label">Last Handshake</span>
-          <span class="vpn-field-value" id="vpn-last-hs">—</span>
-        </div>
+      <div class="vpn-field">
+      <span class="vpn-field-label">Mode</span>
+      <span class="vpn-field-value" id="vpn-mode">—</span>
       </div>
-    </div>
+      <div class="vpn-field">
+      <span class="vpn-field-label">Interface</span>
+      <span class="vpn-field-value" id="vpn-iface">—</span>
+      </div>
+      <div class="vpn-field">
+      <span class="vpn-field-label">Endpoint</span>
+      <span class="vpn-field-value" id="vpn-endpoint">—</span>
+      </div>
+      <div class="vpn-field">
+      <span class="vpn-field-label">Latency</span>
+      <span class="vpn-field-value" id="vpn-latency">—</span>
+      </div>
+      <div class="vpn-field">
+      <span class="vpn-field-label">Public Key</span>
+      <span class="vpn-field-value" id="vpn-pubkey" style="font-size:11px;word-break:break-all">—</span>
+      </div>
+      <div class="vpn-field">
+      <span class="vpn-field-label">Last Handshake</span>
+      <span class="vpn-field-value" id="vpn-last-hs">—</span>
+      </div>
+      </div>
+      </div>
 
-    <!-- Config Editor -->
-    <div class="card" style="animation-delay:60ms">
+      <!-- Config Editor -->
+      <div class="card" style="animation-delay:60ms">
       <div class="card-header">
-        <span class="card-title">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-          VPN Config Editor
-        </span>
-        <div class="card-actions">
-          <button class="btn btn-sm" onclick="generateWARP()">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/>
-              <line x1="8" y1="12" x2="16" y2="12"/>
-            </svg>
-            Generate WARP
-          </button>
-          <button class="btn btn-sm btn-primary" onclick="saveConf()">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-              <polyline points="17 21 17 13 7 13 7 21"/>
-            </svg>
-            Save Config
-          </button>
-        </div>
+      <span class="card-title">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+      VPN Config Editor
+      </span>
+      <div class="card-actions">
+      <button class="btn btn-sm" onclick="generateWARP()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/>
+      <line x1="8" y1="12" x2="16" y2="12"/>
+      </svg>
+      Generate WARP
+      </button>
+      <button class="btn btn-sm btn-primary" onclick="saveConf()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/>
+      </svg>
+      Save Config
+      </button>
+      </div>
       </div>
 
       <div class="alert alert-info" style="margin-bottom:16px">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        PrivateKey is shown as [REDACTED] for security. Saving will write to /etc/routerd/vpn.conf. Reload routerd to apply.
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      PrivateKey is shown as [REDACTED] for security. Saving will write to /etc/routerd/vpn.conf. Reload routerd to apply.
       </div>
 
       <div class="form-group">
-        <textarea id="vpn-conf-editor" style="min-height:320px" spellcheck="false" placeholder="Loading VPN config..."></textarea>
+      <textarea id="vpn-conf-editor" style="min-height:320px" spellcheck="false" placeholder="Loading VPN config..."></textarea>
       </div>
-    </div>
+      </div>
 
-    <!-- Quick Setup -->
-    <div class="card" style="animation-delay:120ms">
+      <!-- Quick Setup -->
+      <div class="card" style="animation-delay:120ms">
       <div class="card-header">
-        <span class="card-title">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-          Quick Setup Guide
-        </span>
+      <span class="card-title">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      Quick Setup Guide
+      </span>
       </div>
 
       <div style="display:flex;flex-direction:column;gap:20px">
-        <!-- Method A -->
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
-            <span class="badge badge-blue">A</span>
-            Cloudflare WARP (automatic with wgcf)
-          </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
-            Click "Generate WARP" above. If <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">wgcf</code> is installed, a real profile is generated automatically. Otherwise install wgcf first:
-          </div>
-          <div class="code-block">pacman -S wgcf
-# or
-go install github.com/ViRb3/wgcf/v2@latest</div>
-        </div>
+      <!-- Method A -->
+      <div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+      <span class="badge badge-blue">A</span>
+      Cloudflare WARP (automatic with wgcf)
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+      Click "Generate WARP" above. If <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">wgcf</code> is installed, a real profile is generated automatically. Otherwise install wgcf first:
+      </div>
+      <div class="code-block">pacman -S wgcf
+      # or
+      go install github.com/ViRb3/wgcf/v2@latest</div>
+      </div>
 
-        <hr class="divider" style="margin:0">
+      <hr class="divider" style="margin:0">
 
-        <!-- Method B -->
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
-            <span class="badge badge-gray">B</span>
-            Custom WireGuard VPS / Mullvad / ProtonVPN
-          </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Generate a keypair and paste into the editor above:</div>
-          <div class="code-block">wg genkey | tee privatekey | wg pubkey > publickey
-cat privatekey   # paste as PrivateKey in [Interface]</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:8px">Minimum working config:</div>
-          <div class="code-block">[Interface]
-PrivateKey = &lt;YOUR_PRIVATE_KEY&gt;
-Address = 10.2.0.2/32
+      <!-- Method B -->
+      <div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+      <span class="badge badge-gray">B</span>
+      Custom WireGuard VPS / Mullvad / ProtonVPN
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Generate a keypair and paste into the editor above:</div>
+      <div class="code-block">wg genkey | tee privatekey | wg pubkey > publickey
+      cat privatekey   # paste as PrivateKey in [Interface]</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">Minimum working config:</div>
+      <div class="code-block">[Interface]
+      PrivateKey = &lt;YOUR_PRIVATE_KEY&gt;
+      Address = 10.2.0.2/32
 
-[Peer]
-PublicKey = &lt;SERVER_PUBLIC_KEY&gt;
-Endpoint = &lt;SERVER_IP&gt;:51820
-AllowedIPs = 0.0.0.0/0</div>
-        </div>
+      [Peer]
+      PublicKey = &lt;SERVER_PUBLIC_KEY&gt;
+      Endpoint = &lt;SERVER_IP&gt;:51820
+      AllowedIPs = 0.0.0.0/0</div>
+      </div>
 
-        <hr class="divider" style="margin:0">
+      <hr class="divider" style="margin:0">
 
-        <!-- Method C -->
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
-            <span class="badge badge-gray">C</span>
-            Existing VPN Interface (Tailscale, custom wg0, tun0)
-          </div>
-          <div style="font-size:12px;color:var(--text-muted)">
-            Set <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">VPN_MODE=custom</code> and
-            <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">VPN_INTERFACE=wg0</code> in Configuration.
-            routerd will use that interface as the NAT uplink without managing its lifecycle.
-          </div>
-        </div>
+      <!-- Method C -->
+      <div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+      <span class="badge badge-gray">C</span>
+      Existing VPN Interface (Tailscale, custom wg0, tun0)
+      </div>
+      <div style="font-size:12px;color:var(--text-muted)">
+      Set <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">VPN_MODE=custom</code> and
+      <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">VPN_INTERFACE=wg0</code> in Configuration.
+      routerd will use that interface as the NAT uplink without managing its lifecycle.
+      </div>
+      </div>
+      </div>
       </div>
     </div>
     </div>
