@@ -130,7 +130,9 @@ routerd [options] <command>
 | `start` | Starts the access point, NAT firewall, and WireGuard VPN tunnel in foreground. |
 | `stop` | Stops the access point, removes NAT rules, tears down VPN tunnel, and cleans up interfaces. |
 | `status` | Displays live status: SSID, Channel, Subnet, connected clients, and active VPN mode. |
-| `reload` | Regenerates `hostapd` and `dnsmasq` runtime configs and restarts services without dropping interface. |
+| `reload` | Regenerates `hostapd` and `dnsmasq` runtime configs, re-applies all NAT/VPN rules. |
+| `logs` | Tails hostapd and dnsmasq log files simultaneously. |
+| `dashboard` | Starts the web dashboard server (default port 8080). |
 | `warp-setup` | Generates an automated Cloudflare WARP WireGuard profile template at `/etc/routerd/vpn.conf`. |
 | `version` | Prints the version string. |
 
@@ -138,10 +140,47 @@ Examples:
 ```sh
 sudo systemctl start routerd     # start as systemd background service
 sudo routerd status              # check live status & connected clients
+sudo routerd logs                # tail hostapd + dnsmasq logs
+sudo routerd dashboard           # start web dashboard on :8080
 sudo routerd warp-setup          # generate Cloudflare WARP profile template
 sudo systemctl reload routerd    # reload config changes
 sudo systemctl stop routerd      # stop service cleanly
 ```
+
+---
+
+## Web Dashboard
+
+routerd ships a built-in dark-mode web dashboard accessible from any device connected to the AP.
+
+```sh
+# Enable in /etc/routerd.conf
+DASHBOARD_ENABLED=true
+DASHBOARD_PORT=8080
+DASHBOARD_PASSWORD=yourpassword   # leave empty to disable auth
+
+# Start the dashboard
+sudo routerd dashboard
+```
+
+Open `http://<AP-gateway-ip>:8080` in any browser on a connected device.
+
+### Dashboard Pages
+
+| Page | Features |
+| --- | --- |
+| **Overview** | Live AP status, connected clients with MAC/IP/hostname, real-time bandwidth via WebSocket |
+| **Bandwidth** | 60-second rolling Chart.js graph, per-client TX/RX breakdown with progress bars |
+| **Logs** | Live tail of hostapd + dnsmasq logs with filter (all/hostapd/dnsmasq), pause/resume |
+| **Configuration** | Visual form editor + raw textarea for `/etc/routerd.conf`, Save & Reload button |
+| **VPN** | WireGuard tunnel status (endpoint, latency, last handshake), config editor, quick setup guide |
+
+### Dashboard Security
+
+- **Session cookie auth** with `HttpOnly` flag — no Basic Auth browser popup
+- **Brute force protection** — IP locked out for 5 minutes after 5 failed attempts
+- **CORS same-origin** — no wildcard `Access-Control-Allow-Origin`
+- **WebSocket origin validation** — only same-host connections accepted
 
 ---
 

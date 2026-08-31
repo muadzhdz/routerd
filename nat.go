@@ -14,6 +14,38 @@ const (
 	ip6tablesCmd = "ip6tables"
 )
 
+// isNFTables returns true if iptables is backed by nf_tables (xtables-nft-multi).
+// iptables-nft does not support the -w (wait/lock) flag — passing it causes
+// exit status 4 on certain table/chain operations.
+var _isNFT = func() bool {
+	out, _ := runCmd("iptables", "--version")
+	return strings.Contains(out, "nf_tables") || strings.Contains(out, "nft")
+}()
+
+// iptArgs builds an iptables argument list, stripping -w on nft-based systems.
+func iptArgs(args ...string) []string {
+	if !_isNFT {
+		return args
+	}
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		if a != "-w" {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// runIpt runs iptables with the given args, auto-stripping -w on nft systems.
+func runIpt(args ...string) (string, error) {
+	return runCmd(iptablesCmd, iptArgs(args...)...)
+}
+
+// runIp6t runs ip6tables with the given args, auto-stripping -w on nft systems.
+func runIp6t(args ...string) (string, error) {
+	return runCmd(ip6tablesCmd, iptArgs(args...)...)
+}
+
 // routerd iptables chain names — all prefixed to allow clean teardown.
 const (
 	natPostChain = "ROUTERD_POST"
@@ -75,9 +107,9 @@ func setupIPv6LeakProtection(ap string) {
 	} else {
 		logInfo("IPv6 disabled on %s interface (sysctl)", ap)
 	}
-	_, _ = runCmd(ip6tablesCmd, "-w", "-I", "INPUT", "-i", ap, "-j", "DROP")
-	_, _ = runCmd(ip6tablesCmd, "-w", "-I", "FORWARD", "-i", ap, "-j", "DROP")
-	_, _ = runCmd(ip6tablesCmd, "-w", "-I", "FORWARD", "-o", ap, "-j", "DROP")
+	_, _ = runIp6t("-w", "-I", "INPUT", "-i", ap, "-j", "DROP")
+	_, _ = runIp6t("-w", "-I", "FORWARD", "-i", ap, "-j", "DROP")
+	_, _ = runIp6t("-w", "-I", "FORWARD", "-o", ap, "-j", "DROP")
 	logInfo("IPv6 leak protection rules active (ip6tables DROP on %s)", ap)
 }
 
@@ -87,9 +119,9 @@ func cleanupIPv6LeakProtection(ap string) {
 	}
 	sysctlPath := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/disable_ipv6", ap)
 	_ = writeSysctl(sysctlPath, "0")
-	_, _ = runCmd(ip6tablesCmd, "-w", "-D", "INPUT", "-i", ap, "-j", "DROP")
-	_, _ = runCmd(ip6tablesCmd, "-w", "-D", "FORWARD", "-i", ap, "-j", "DROP")
-	_, _ = runCmd(ip6tablesCmd, "-w", "-D", "FORWARD", "-o", ap, "-j", "DROP")
+	_, _ = runIp6t("-w", "-D", "INPUT", "-i", ap, "-j", "DROP")
+	_, _ = runIp6t("-w", "-D", "FORWARD", "-i", ap, "-j", "DROP")
+	_, _ = runIp6t("-w", "-D", "FORWARD", "-o", ap, "-j", "DROP")
 }
 
 // --- Rate limiting -----------------------------------------------------------
@@ -155,17 +187,17 @@ func cleanupVPNRouting(ap, runDir string) {
 
 // setupTorRules installs transparent Tor proxying rules in the nat PREROUTING chain.
 func setupTorRules(ap string) error {
-	out, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-N", natPreChain)
+	out, err := runIpt("-w", "-t", "nat", "-N", natPreChain)
 	if err != nil && !isAlreadyExists(out) {
 		return fmt.Errorf("cannot create nat prerouting chain: %w", err)
 	}
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain,
+	_, _ = runIpt("-w", "-t", "nat", "-A", natPreChain,
 		"-i", ap, "-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-ports", torDNSPort)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain,
+	_, _ = runIpt("-w", "-t", "nat", "-A", natPreChain,
 		"-i", ap, "-p", "tcp", "--dport", "53", "-j", "REDIRECT", "--to-ports", torDNSPort)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain,
+	_, _ = runIpt("-w", "-t", "nat", "-A", natPreChain,
 		"-i", ap, "-p", "tcp", "--syn", "-j", "REDIRECT", "--to-ports", torTCPPort)
-	if _, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-I", "PREROUTING", "-j", natPreChain); err != nil {
+	if _, err := runIpt("-w", "-t", "nat", "-I", "PREROUTING", "-j", natPreChain); err != nil {
 		return fmt.Errorf("cannot attach nat prerouting chain: %w", err)
 	}
 	logInfo("Tor transparent proxy active (redirecting TCP->%s, DNS->%s)", torTCPPort, torDNSPort)
@@ -175,32 +207,32 @@ func setupTorRules(ap string) error {
 // setupVPNDNSRules forces all AP client DNS queries to go through the VPN
 // tunnel using the configured VPN_DNS server.
 func setupVPNDNSRules(ap, vpnDNS string) {
-	out, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-N", natPreChain)
+	out, err := runIpt("-w", "-t", "nat", "-N", natPreChain)
 	if err != nil && !isAlreadyExists(out) {
 		logWarn("cannot create nat prerouting chain for VPN DNS: %v", err)
 		return
 	}
 	dest := vpnDNS + ":53"
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain,
+	_, _ = runIpt("-w", "-t", "nat", "-A", natPreChain,
 		"-i", ap, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", dest)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPreChain,
+	_, _ = runIpt("-w", "-t", "nat", "-A", natPreChain,
 		"-i", ap, "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", dest)
-	if _, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-I", "PREROUTING", "-j", natPreChain); err == nil {
+	if _, err := runIpt("-w", "-t", "nat", "-I", "PREROUTING", "-j", natPreChain); err == nil {
 		logInfo("Forced VPN DNS tunnel active (AP clients DNS -> %s via VPN)", vpnDNS)
 	}
 }
 
 // setupMasquerade installs MASQUERADE in the nat POSTROUTING chain for the uplink.
 func setupMasquerade(uplink string) error {
-	out, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-N", natPostChain)
+	out, err := runIpt("-w", "-t", "nat", "-N", natPostChain)
 	if err != nil && !isAlreadyExists(out) {
 		return fmt.Errorf("cannot create nat postrouting chain: %w", err)
 	}
-	if _, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-A", natPostChain,
+	if _, err := runIpt("-w", "-t", "nat", "-A", natPostChain,
 		"-o", uplink, "-j", "MASQUERADE"); err != nil {
 		return fmt.Errorf("cannot add MASQUERADE rule: %w", err)
 	}
-	if _, err := runCmd(iptablesCmd, "-w", "-t", "nat", "-I", "POSTROUTING", "-j", natPostChain); err != nil {
+	if _, err := runIpt("-w", "-t", "nat", "-I", "POSTROUTING", "-j", natPostChain); err != nil {
 		return fmt.Errorf("cannot attach nat postrouting chain: %w", err)
 	}
 	return nil
@@ -209,23 +241,23 @@ func setupMasquerade(uplink string) error {
 // setupForwardRules allows forwarding between AP clients and the uplink,
 // with an optional VPN kill-switch that drops non-VPN traffic.
 func setupForwardRules(ap, uplink string, enableVPN, vpnKillSwitch bool) error {
-	out, err := runCmd(iptablesCmd, "-w", "-N", fwdChain)
+	out, err := runIpt("-w", "-N", fwdChain)
 	if err != nil && !isAlreadyExists(out) {
 		return fmt.Errorf("cannot create forward chain: %w", err)
 	}
-	if _, err := runCmd(iptablesCmd, "-w", "-A", fwdChain,
+	if _, err := runIpt("-w", "-A", fwdChain,
 		"-i", ap, "-o", uplink, "-j", "ACCEPT"); err != nil {
 		return fmt.Errorf("cannot add forward ACCEPT rule: %w", err)
 	}
-	if _, err := runCmd(iptablesCmd, "-w", "-A", fwdChain,
+	if _, err := runIpt("-w", "-A", fwdChain,
 		"-i", uplink, "-o", ap, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"); err != nil {
 		return fmt.Errorf("cannot add forward ESTABLISHED rule: %w", err)
 	}
 	if enableVPN && vpnKillSwitch {
-		_, _ = runCmd(iptablesCmd, "-w", "-A", fwdChain, "-i", ap, "-j", "DROP")
+		_, _ = runIpt("-w", "-A", fwdChain, "-i", ap, "-j", "DROP")
 		logInfo("VPN Kill-Switch active (unencrypted fallback traffic blocked)")
 	}
-	if _, err := runCmd(iptablesCmd, "-w", "-I", "FORWARD", "-j", fwdChain); err != nil {
+	if _, err := runIpt("-w", "-I", "FORWARD", "-j", fwdChain); err != nil {
 		return fmt.Errorf("cannot attach forward chain: %w", err)
 	}
 	return nil
@@ -234,24 +266,24 @@ func setupForwardRules(ap, uplink string, enableVPN, vpnKillSwitch bool) error {
 // setupHostIsolation blocks AP clients from reaching host services while
 // still allowing DHCP and DNS.
 func setupHostIsolation(ap string) error {
-	out, err := runCmd(iptablesCmd, "-w", "-N", inputChain)
+	out, err := runIpt("-w", "-N", inputChain)
 	if err != nil && !isAlreadyExists(out) {
 		return fmt.Errorf("cannot create input chain: %w", err)
 	}
 	// Allow DHCP (UDP 67/68)
-	_, _ = runCmd(iptablesCmd, "-w", "-A", inputChain,
+	_, _ = runIpt("-w", "-A", inputChain,
 		"-i", ap, "-p", "udp", "--dport", "67:68", "--sport", "67:68", "-j", "ACCEPT")
 	// Allow DNS (UDP/TCP 53)
-	_, _ = runCmd(iptablesCmd, "-w", "-A", inputChain,
+	_, _ = runIpt("-w", "-A", inputChain,
 		"-i", ap, "-p", "udp", "--dport", "53", "-j", "ACCEPT")
-	_, _ = runCmd(iptablesCmd, "-w", "-A", inputChain,
+	_, _ = runIpt("-w", "-A", inputChain,
 		"-i", ap, "-p", "tcp", "--dport", "53", "-j", "ACCEPT")
 	// Allow established/related
-	_, _ = runCmd(iptablesCmd, "-w", "-A", inputChain,
+	_, _ = runIpt("-w", "-A", inputChain,
 		"-i", ap, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT")
 	// Drop all other input from AP interface targeting the host
-	_, _ = runCmd(iptablesCmd, "-w", "-A", inputChain, "-i", ap, "-j", "DROP")
-	if _, err := runCmd(iptablesCmd, "-w", "-I", "INPUT", "-j", inputChain); err != nil {
+	_, _ = runIpt("-w", "-A", inputChain, "-i", ap, "-j", "DROP")
+	if _, err := runIpt("-w", "-I", "INPUT", "-j", inputChain); err != nil {
 		return fmt.Errorf("cannot attach input chain: %w", err)
 	}
 	logInfo("host isolation active (AP clients blocked from host services)")
@@ -261,22 +293,22 @@ func setupHostIsolation(ap string) error {
 // setupMangleRules installs TTL spoofing and TCP MSS clamping in the mangle table.
 // mssClamping is true when either VPN is active or DPI bypass mode is enabled.
 func setupMangleRules(ap string, spoofTTL int, mssClamping bool) {
-	out, err := runCmd(iptablesCmd, "-w", "-t", "mangle", "-N", mangleChain)
+	out, err := runIpt("-w", "-t", "mangle", "-N", mangleChain)
 	if err != nil && !isAlreadyExists(out) {
 		logWarn("cannot create mangle chain: %v", err)
 		return
 	}
 	if spoofTTL > 0 {
-		_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-A", mangleChain,
+		_, _ = runIpt("-w", "-t", "mangle", "-A", mangleChain,
 			"-i", ap, "-j", "TTL", "--ttl-set", strconv.Itoa(spoofTTL))
 		logInfo("TTL spoofing active (TTL set to %d)", spoofTTL)
 	}
 	if mssClamping {
-		_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-A", mangleChain,
+		_, _ = runIpt("-w", "-t", "mangle", "-A", mangleChain,
 			"-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu")
 		logInfo("TCP MSS Clamping active (anti-fragmentation)")
 	}
-	if _, err := runCmd(iptablesCmd, "-w", "-t", "mangle", "-I", "PREROUTING", "-j", mangleChain); err != nil {
+	if _, err := runIpt("-w", "-t", "mangle", "-I", "PREROUTING", "-j", mangleChain); err != nil {
 		logWarn("cannot attach mangle PREROUTING chain: %v", err)
 	}
 }
@@ -357,29 +389,29 @@ func disableNAT(runDir, ap string) {
 	cleanupRateLimit(ap)
 
 	// nat PREROUTING
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-D", "PREROUTING", "-j", natPreChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-F", natPreChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-X", natPreChain)
+	_, _ = runIpt("-w", "-t", "nat", "-D", "PREROUTING", "-j", natPreChain)
+	_, _ = runIpt("-w", "-t", "nat", "-F", natPreChain)
+	_, _ = runIpt("-w", "-t", "nat", "-X", natPreChain)
 
 	// nat POSTROUTING
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-D", "POSTROUTING", "-j", natPostChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-F", natPostChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "nat", "-X", natPostChain)
+	_, _ = runIpt("-w", "-t", "nat", "-D", "POSTROUTING", "-j", natPostChain)
+	_, _ = runIpt("-w", "-t", "nat", "-F", natPostChain)
+	_, _ = runIpt("-w", "-t", "nat", "-X", natPostChain)
 
 	// filter FORWARD
-	_, _ = runCmd(iptablesCmd, "-w", "-D", "FORWARD", "-j", fwdChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-F", fwdChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-X", fwdChain)
+	_, _ = runIpt("-w", "-D", "FORWARD", "-j", fwdChain)
+	_, _ = runIpt("-w", "-F", fwdChain)
+	_, _ = runIpt("-w", "-X", fwdChain)
 
 	// filter INPUT
-	_, _ = runCmd(iptablesCmd, "-w", "-D", "INPUT", "-j", inputChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-F", inputChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-X", inputChain)
+	_, _ = runIpt("-w", "-D", "INPUT", "-j", inputChain)
+	_, _ = runIpt("-w", "-F", inputChain)
+	_, _ = runIpt("-w", "-X", inputChain)
 
 	// mangle PREROUTING
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-D", "PREROUTING", "-j", mangleChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-F", mangleChain)
-	_, _ = runCmd(iptablesCmd, "-w", "-t", "mangle", "-X", mangleChain)
+	_, _ = runIpt("-w", "-t", "mangle", "-D", "PREROUTING", "-j", mangleChain)
+	_, _ = runIpt("-w", "-t", "mangle", "-F", mangleChain)
+	_, _ = runIpt("-w", "-t", "mangle", "-X", mangleChain)
 
 	// Restore ip_forward.
 	if data, err := os.ReadFile(filepath.Join(runDir, "ip_forward.orig")); err == nil {

@@ -81,7 +81,7 @@ func acquirePIDLock() error {
 			_ = os.Remove(pidFile)
 		}
 	}
-	return os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0644)
+	return os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0600)
 }
 
 func releasePIDLock() {
