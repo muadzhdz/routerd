@@ -9,10 +9,9 @@
 <body>
 <div class="layout">
 
-  <!-- Topbar -->
   <header class="topbar">
     <div class="topbar-brand">
-      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
         <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
         <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
       </svg>
@@ -20,23 +19,22 @@
     </div>
     <div class="topbar-right">
       <span class="status-pill stopped" id="status-pill">
-        <span class="dot"></span>
-        <span id="status-text">Loading</span>
+        <span class="dot"></span><span id="status-text">—</span>
       </span>
-      <button class="btn btn-sm" id="btn-reload" onclick="doAction('reload')" title="Reload config">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <button class="btn btn-sm" onclick="doAction('reload')">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
         Reload
       </button>
-      <button class="btn btn-sm btn-danger" id="btn-stop" onclick="doAction('stop')" title="Stop routerd">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <button class="btn btn-sm btn-danger" id="btn-stop" onclick="doAction('stop')">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
         </svg>
         Stop
       </button>
-      <button class="btn btn-sm btn-success" id="btn-start" onclick="doAction('start')" title="Start routerd" style="display:none">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <button class="btn btn-sm btn-success" id="btn-start" onclick="doAction('start')" style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
         Start
@@ -44,7 +42,6 @@
     </div>
   </header>
 
-  <!-- Sidebar -->
   <nav class="sidebar">
     <span class="nav-section">Monitor</span>
     <a href="/" class="nav-item active">
@@ -64,7 +61,7 @@
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
         <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
       </svg>
       Logs
     </a>
@@ -83,121 +80,134 @@
       VPN
     </a>
     <div class="sidebar-spacer"></div>
-    <div class="sidebar-footer">
-      <span id="footer-version">routerd</span>
-    </div>
+    <div class="sidebar-footer" id="footer-version">routerd</div>
   </nav>
 
-  <!-- Main -->
   <main class="main">
-    <div class="page-header">
-      <div class="page-title">Overview</div>
-      <div class="page-sub">Real-time access point and network status</div>
-    </div>
+    <div class="page-content">
 
-    <!-- Stats row -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
-          </svg>
-          SSID
+      <!-- Stats row -->
+      <div class="stats-grid">
+        <div class="stat-card" style="animation-delay:0ms">
+          <div class="stat-label">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
+            </svg>
+            SSID
+          </div>
+          <div class="stat-value" id="stat-ssid">—</div>
+          <div class="stat-sub" id="stat-channel">—</div>
         </div>
-        <div class="stat-value" id="stat-ssid">—</div>
-        <div class="stat-sub" id="stat-channel">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
-          Uptime
+        <div class="stat-card" style="animation-delay:40ms">
+          <div class="stat-label">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Uptime
+          </div>
+          <div class="stat-value" id="stat-uptime">—</div>
+          <div class="stat-sub" id="stat-subnet">—</div>
         </div>
-        <div class="stat-value" id="stat-uptime">—</div>
-        <div class="stat-sub" id="stat-subnet">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          Clients
+        <div class="stat-card" style="animation-delay:80ms">
+          <div class="stat-label">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Clients
+          </div>
+          <div class="stat-value" id="stat-clients">—</div>
+          <div class="stat-sub" id="stat-iface">—</div>
         </div>
-        <div class="stat-value" id="stat-clients">—</div>
-        <div class="stat-sub" id="stat-iface">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          VPN
+        <div class="stat-card" style="animation-delay:120ms">
+          <div class="stat-label">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            VPN
+          </div>
+          <div class="stat-value" id="stat-vpn">—</div>
+          <div class="stat-sub" id="stat-vpn-sub">—</div>
         </div>
-        <div class="stat-value" id="stat-vpn">—</div>
-        <div class="stat-sub" id="stat-vpn-endpoint">—</div>
       </div>
-    </div>
 
-    <!-- Connected clients -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Connected Clients</span>
-        <div class="card-actions">
+      <!-- Connected clients -->
+      <div class="card" style="animation-delay:160ms">
+        <div class="card-header">
+          <span class="card-title">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+            </svg>
+            Connected Clients
+          </span>
           <span class="badge badge-gray" id="client-count-badge">0</span>
         </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>MAC Address</th>
+                <th>IP Address</th>
+                <th>Hostname</th>
+                <th>Signal</th>
+                <th>TX Rate</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="clients-tbody">
+              <tr><td colspan="6">
+                <div class="empty-state">
+                  <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                  </svg>
+                  <p>No clients connected</p>
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>MAC Address</th>
-              <th>IP Address</th>
-              <th>Hostname</th>
-              <th>Signal</th>
-              <th>TX Rate</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="clients-tbody">
-            <tr><td colspan="6"><div class="empty-state"><p>No clients connected</p></div></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-    <!-- Bandwidth mini -->
-    <div class="card" id="card-bw">
-      <div class="card-header">
-        <span class="card-title">Bandwidth</span>
-        <a href="/bandwidth.html" class="btn btn-sm">View Details</a>
-      </div>
-      <div style="display:flex;gap:24px;align-items:center;">
-        <div>
-          <div class="stat-label" style="margin-bottom:4px;">
-            <svg width="11" height="11" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24">
-              <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+      <!-- Bandwidth mini -->
+      <div class="card" style="animation-delay:200ms">
+        <div class="card-header">
+          <span class="card-title">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
-            Download
-          </div>
-          <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--blue)" id="bw-rx">—</div>
+            Bandwidth
+          </span>
+          <a href="/bandwidth.html" class="btn btn-sm">View Details</a>
         </div>
-        <div>
-          <div class="stat-label" style="margin-bottom:4px;">
-            <svg width="11" height="11" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24">
-              <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-            </svg>
-            Upload
+        <div style="display:flex;gap:32px;align-items:center;padding:4px 0">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+              <svg width="10" height="10" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24">
+                <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+              </svg>
+              Download
+            </div>
+            <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--blue);transition:all 0.3s" id="bw-rx">— bps</div>
           </div>
-          <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green)" id="bw-tx">—</div>
+          <div style="width:1px;height:40px;background:var(--border)"></div>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+              <svg width="10" height="10" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24">
+                <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+              </svg>
+              Upload
+            </div>
+            <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green);transition:all 0.3s" id="bw-tx">— bps</div>
+          </div>
         </div>
       </div>
+
     </div>
   </main>
 </div>
-
 <div id="toast-container"></div>
 
 <script>
@@ -206,100 +216,83 @@ let ws, reconnectTimer;
 
 function connect() {
   ws = new WebSocket(WS_URL);
-  ws.onmessage = (e) => {
-    try { handlePush(JSON.parse(e.data)); } catch {}
-  };
-  ws.onclose = () => {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, 3000);
-  };
+  ws.onmessage = e => { try { handlePush(JSON.parse(e.data)); } catch {} };
+  ws.onclose = () => { reconnectTimer = setTimeout(connect, 3000); };
 }
 
 function handlePush(data) {
-  // Status pill
   const pill = document.getElementById('status-pill');
-  const txt  = document.getElementById('status-text');
-  if (data.running) {
-    pill.className = 'status-pill running';
-    txt.textContent = 'Running';
-    document.getElementById('btn-stop').style.display = '';
-    document.getElementById('btn-start').style.display = 'none';
-  } else {
-    pill.className = 'status-pill stopped';
-    txt.textContent = 'Stopped';
-    document.getElementById('btn-stop').style.display = 'none';
-    document.getElementById('btn-start').style.display = '';
-  }
+  const running = data.running;
+  pill.className = 'status-pill ' + (running ? 'running' : 'stopped');
+  document.getElementById('status-text').textContent = running ? 'Running' : 'Stopped';
+  document.getElementById('btn-stop').style.display  = running ? '' : 'none';
+  document.getElementById('btn-start').style.display = running ? 'none' : '';
 
-  // Stats
-  setText('stat-ssid', data.ssid || '—');
-  setText('stat-uptime', data.uptime || '—');
-  setText('stat-clients', data.clients ? data.clients.length : '—');
+  animateText('stat-ssid',    data.ssid || '—');
+  animateText('stat-uptime',  data.uptime || '—');
+  animateText('stat-clients', data.clients ? String(data.clients.length) : '—');
 
   if (data.vpn_active) {
-    setText('stat-vpn', data.vpn_mode || 'Active');
-    setText('stat-vpn-endpoint', data.vpn_latency ? `${data.vpn_latency} latency` : 'Active');
+    animateText('stat-vpn', data.vpn_mode || 'Active');
+    document.getElementById('stat-vpn-sub').textContent = data.vpn_latency ? data.vpn_latency + ' latency' : 'Tunnel active';
   } else {
-    setText('stat-vpn', 'Disabled');
-    setText('stat-vpn-endpoint', '—');
+    animateText('stat-vpn', 'Off');
+    document.getElementById('stat-vpn-sub').textContent = 'VPN disabled';
   }
 
-  // Bandwidth mini
   if (data.bandwidth) {
-    setText('bw-rx', data.bandwidth.total_rx_human || '0 bps');
-    setText('bw-tx', data.bandwidth.total_tx_human || '0 bps');
+    animateText('bw-rx', data.bandwidth.total_rx_human || '0 bps');
+    animateText('bw-tx', data.bandwidth.total_tx_human || '0 bps');
   }
 
-  // Clients table
   renderClients(data.clients || []);
-  setText('client-count-badge', data.clients ? data.clients.length : 0);
-  document.getElementById('footer-version').textContent = `routerd v${data.version || ''}`.trim();
+  document.getElementById('client-count-badge').textContent = data.clients ? data.clients.length : 0;
+}
+
+function animateText(id, val) {
+  const el = document.getElementById(id);
+  if (!el || el.textContent === val) return;
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(-4px)';
+  setTimeout(() => {
+    el.textContent = val;
+    el.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+  }, 100);
 }
 
 function renderClients(clients) {
   const tbody = document.getElementById('clients-tbody');
   if (!clients.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No clients connected</p></div></td></tr>';
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+      <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      </svg><p>No clients connected</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = clients.map(c => `
     <tr>
       <td><span class="mac">${c.mac}</span></td>
       <td><span class="ip">${c.ip}</span></td>
-      <td>${c.hostname || '<span style="color:var(--text-dim)">—</span>'}</td>
+      <td style="color:var(--text-muted)">${c.hostname || '—'}</td>
       <td>${c.signal ? `<span class="badge badge-gray">${c.signal} dBm</span>` : '—'}</td>
-      <td>${c.tx_rate ? `<span style="font-family:var(--font-mono);font-size:12px">${c.tx_rate}</span>` : '—'}</td>
-      <td>
-        <button class="btn btn-sm btn-danger" onclick="kickClient('${c.mac}')">Kick</button>
-      </td>
-    </tr>
-  `).join('');
+      <td><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">${c.tx_rate || '—'}</span></td>
+      <td><button class="btn btn-sm btn-danger" onclick="kickClient('${c.mac}')">Kick</button></td>
+    </tr>`).join('');
 }
 
 async function kickClient(mac) {
   if (!confirm(`Deauthenticate ${mac}?`)) return;
-  const r = await fetch('/api/client/kick', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({mac})
-  });
+  const r = await fetch('/api/client/kick', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mac}) });
   const d = await r.json();
   toast(d.ok ? 'success' : 'error', d.message);
 }
 
 async function doAction(action) {
-  const r = await fetch('/api/action', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({action})
-  });
+  const r = await fetch('/api/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action}) });
   const d = await r.json();
   toast(d.ok ? 'success' : 'error', d.message);
-}
-
-function setText(id, v) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = v;
 }
 
 function toast(type, msg) {
@@ -307,16 +300,19 @@ function toast(type, msg) {
   el.className = `toast ${type}`;
   el.textContent = msg;
   document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 200);
+  }, 3800);
 }
 
-// Fetch initial status via REST (before WS connects)
+// Initial REST fetch
 fetch('/api/status').then(r => r.json()).then(d => {
-  setText('stat-ssid', d.ssid || '—');
-  setText('stat-channel', d.channel ? `Ch ${d.channel} · ${d.band?.toUpperCase() || ''} band` : '—');
-  setText('stat-subnet', d.subnet || '—');
-  setText('stat-iface', d.ap_interface ? `${d.ap_interface} → ${d.sta_interface}` : '—');
-  setText('footer-version', `routerd ${d.version || ''}`);
+  document.getElementById('stat-ssid').textContent    = d.ssid || '—';
+  document.getElementById('stat-channel').textContent = d.channel ? `Ch ${d.channel} · ${(d.band||'').toUpperCase()} band` : '—';
+  document.getElementById('stat-subnet').textContent  = d.subnet || '—';
+  document.getElementById('stat-iface').textContent   = d.ap_interface ? `${d.ap_interface} → ${d.sta_interface}` : '—';
+  document.getElementById('footer-version').textContent = `routerd ${d.version || ''}`.trim();
 });
 
 connect();

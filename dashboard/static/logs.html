@@ -79,12 +79,11 @@
   </nav>
 
   <main class="main">
-    <div class="page-header">
-      <div class="page-title">Live Logs</div>
-      <div class="page-sub">Real-time output from hostapd and dnsmasq</div>
+    <div class="page-content">
+<div class="page-sub">Real-time output from hostapd and dnsmasq</div>
     </div>
 
-    <div class="card">
+    <div class="card" style="animation-delay:0ms">
       <div class="log-controls">
         <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
         <button class="filter-btn" id="filter-hostapd" onclick="setFilter('hostapd')">
@@ -120,6 +119,7 @@
       </div>
 
       <div class="log-wrap" id="log-output"></div>
+    </div>
     </div>
   </main>
 </div>

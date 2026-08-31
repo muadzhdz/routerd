@@ -78,15 +78,14 @@
   </nav>
 
   <main class="main">
-    <div class="page-header">
-      <div class="page-title">Configuration</div>
-      <div class="page-sub">Edit and apply routerd settings — changes take effect after reload</div>
+    <div class="page-content">
+<div class="page-sub">Edit and apply routerd settings — changes take effect after reload</div>
     </div>
 
     <div id="alert-area"></div>
 
     <!-- Visual editor -->
-    <div class="card">
+    <div class="card" style="animation-delay:0ms">
       <div class="card-header">
         <span class="card-title">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
@@ -290,7 +289,7 @@
     </div>
 
     <!-- Raw editor -->
-    <div class="card" style="margin-top:16px">
+    <div class="card" style="animation-delay:60ms" style="margin-top:16px">
       <div class="card-header">
         <span class="card-title">Raw Config Editor</span>
         <button class="btn btn-sm" onclick="saveRaw()">
@@ -303,6 +302,7 @@
       <div class="form-group">
         <textarea id="raw-config" style="min-height:280px;font-size:12px" spellcheck="false"></textarea>
       </div>
+    </div>
     </div>
   </main>
 </div>

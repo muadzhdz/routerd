@@ -73,9 +73,8 @@
   </nav>
 
   <main class="main">
-    <div class="page-header">
-      <div class="page-title">Bandwidth Monitor</div>
-      <div class="page-sub">Real-time per-client traffic via AP interface counters</div>
+    <div class="page-content">
+<div class="page-sub">Real-time per-client traffic via AP interface counters</div>
     </div>
 
     <!-- Total stats -->
@@ -103,7 +102,7 @@
     </div>
 
     <!-- Chart -->
-    <div class="card">
+    <div class="card" style="animation-delay:0ms">
       <div class="card-header">
         <span class="card-title">60-Second Traffic History</span>
         <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
@@ -123,7 +122,7 @@
     </div>
 
     <!-- Per-client -->
-    <div class="card">
+    <div class="card" style="animation-delay:60ms">
       <div class="card-header">
         <span class="card-title">Per-Client Breakdown</span>
         <span class="badge badge-gray" id="client-bw-count">0 clients</span>
@@ -145,6 +144,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   </main>
 </div>
