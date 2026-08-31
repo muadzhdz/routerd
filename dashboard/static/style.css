@@ -185,20 +185,23 @@ input, textarea, select { font-family: inherit; }
 }
 .nav-section:first-child { padding-top: 4px; }
 
-/* Logout item in sidebar */
-a.nav-item[href="/auth/logout"] {
-  color: var(--text-dim);
+/* Logout wrapper — handles border dan vertical spacing */
+.sidebar-logout {
   border-top: 1px solid var(--border);
-  margin-top: 16px;
-  padding-top: 18px;
-  padding-bottom: 18px;
-  margin-bottom: 0;
-  border-radius: var(--radius);
+  padding: 12px 0 8px;
 }
-a.nav-item[href="/auth/logout"]:hover {
-  background: var(--red-dim);
-  color: var(--red);
+
+/* Logout nav item — tinggi sama dengan nav-item lain */
+.nav-logout {
+  color: var(--text-dim);
 }
+.nav-logout:hover {
+  background: var(--red-dim) !important;
+  color: var(--red) !important;
+}
+
+/* Remove old logout selector */
+a.nav-item[href="/auth/logout"] { display: none; }
 
 .sidebar-spacer { flex: 1; }
 
