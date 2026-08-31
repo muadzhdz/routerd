@@ -74,7 +74,7 @@ input, textarea, select { font-family: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 24px;
   background: rgba(8,8,8,0.92);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -86,13 +86,22 @@ input, textarea, select { font-family: inherit; }
 .topbar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.4px;
-  color: var(--accent);
+  gap: 14px;
 }
-.topbar-brand svg { color: var(--text-muted); }
+
+/* ASCII logo in topbar */
+.ascii-logo {
+  font-family: var(--font-mono);
+  font-size: 6.5px;
+  line-height: 1.15;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  white-space: pre;
+  user-select: none;
+  opacity: 0.7;
+  transition: opacity var(--transition);
+}
+.ascii-logo:hover { opacity: 1; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
@@ -139,7 +148,7 @@ input, textarea, select { font-family: inherit; }
   padding: 20px 10px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   position: sticky;
   top: var(--topbar-h);
   height: calc(100vh - var(--topbar-h));
@@ -150,7 +159,7 @@ input, textarea, select { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 14px;
+  padding: 10px 14px;
   border-radius: var(--radius);
   color: var(--text-muted);
   font-size: 13px;
@@ -158,6 +167,7 @@ input, textarea, select { font-family: inherit; }
   transition: background var(--transition), color var(--transition);
   white-space: nowrap;
   position: relative;
+  margin-bottom: 2px;
 }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-item.active {
@@ -180,18 +190,24 @@ input, textarea, select { font-family: inherit; }
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding: 18px 14px 6px;
+  padding: 18px 14px 8px;
 }
 .nav-section:first-child { padding-top: 4px; }
 
-.sidebar-spacer { flex: 1; }
-.sidebar-footer {
-  padding: 14px;
-  font-size: 11px;
+/* Logout item in sidebar */
+a.nav-item[href="/auth/logout"] {
   color: var(--text-dim);
   border-top: 1px solid var(--border);
   margin-top: 8px;
+  padding-top: 14px;
+  border-radius: 0 0 var(--radius) var(--radius);
 }
+a.nav-item[href="/auth/logout"]:hover {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.sidebar-spacer { flex: 1; }
 
 /* ─── Main content — centered ────────────────────────────── */
 .main {
