@@ -1,6 +1,3 @@
-// Package main implements the routerd daemon — a single-binary tool that turns
-// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
-// and transparent WireGuard VPN gateway.
 package main
 
 import (

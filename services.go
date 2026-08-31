@@ -1,6 +1,3 @@
-// Package main implements the routerd daemon — a single-binary tool that turns
-// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
-// and transparent WireGuard VPN gateway.
 package main
 
 import (
@@ -138,8 +135,13 @@ func stopProcs() {
 
 // --- IP helpers -------------------------------------------------------------
 
+// ipNetmask returns the dotted-decimal subnet mask of a CIDR string.
+// Returns "255.255.255.0" as a safe fallback if cidr is invalid.
 func ipNetmask(cidr string) string {
-	_, ipnet, _ := net.ParseCIDR(cidr)
+	_, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil || ipnet == nil {
+		return "255.255.255.0"
+	}
 	return net.IP(ipnet.Mask).String()
 }
 

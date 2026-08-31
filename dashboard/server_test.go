@@ -24,7 +24,7 @@ func newTestServer(t *testing.T, password string) (*Server, string) {
 		t.Fatalf("write config: %v", err)
 	}
 	vpnPath := filepath.Join(dir, "vpn.conf")
-	srv := NewServer(cfgPath, vpnPath, dir, "0.0.0.0-test", "0.0.0.0", password, 18080)
+	srv := NewServer(cfgPath, vpnPath, dir, "0.0.0-test", "0.0.0.0", password, 18080)
 	return srv, dir
 }
 

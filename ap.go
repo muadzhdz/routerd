@@ -1,6 +1,3 @@
-// Package main implements the routerd daemon — a single-binary tool that turns
-// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
-// and transparent WireGuard VPN gateway.
 package main
 
 import (
@@ -73,20 +70,21 @@ func createAPInterface(sta, ap string, useRandomMAC bool) error {
 	}
 
 	// Preferred: create the interface directly in AP mode.
-	if out, err := runCmd("iw", "dev", sta, "interface", "add", ap, "type", "__ap", "addr", mac); err == nil {
+	out, err := runCmd("iw", "dev", sta, "interface", "add", ap, "type", "__ap", "addr", mac)
+	if err == nil {
 		return nil
-	} else {
-		lastErr := strings.TrimSpace(out)
-		// Fallback: create managed, bring it up, then switch to AP.
-		if out2, err2 := runCmd("iw", "dev", sta, "interface", "add", ap, "type", "managed", "addr", mac); err2 != nil {
-			return fmt.Errorf("cannot create AP interface %q on %q: %s / %s", ap, sta, lastErr, strings.TrimSpace(out2))
-		}
-		if out2, err2 := runCmd("ip", "link", "set", ap, "up"); err2 != nil {
-			return fmt.Errorf("cannot bring up %q: %s", ap, strings.TrimSpace(out2))
-		}
-		if out2, err2 := runCmd("iw", "dev", ap, "set", "type", "ap"); err2 != nil {
-			return fmt.Errorf("cannot switch %q to AP mode: %s", ap, strings.TrimSpace(out2))
-		}
+	}
+	lastErr := strings.TrimSpace(out)
+
+	// Fallback: create managed, bring it up, then switch to AP.
+	if out2, err2 := runCmd("iw", "dev", sta, "interface", "add", ap, "type", "managed", "addr", mac); err2 != nil {
+		return fmt.Errorf("cannot create AP interface %q on %q: %s / %s", ap, sta, lastErr, strings.TrimSpace(out2))
+	}
+	if out2, err2 := runCmd("ip", "link", "set", ap, "up"); err2 != nil {
+		return fmt.Errorf("cannot bring up %q: %s", ap, strings.TrimSpace(out2))
+	}
+	if out2, err2 := runCmd("iw", "dev", ap, "set", "type", "ap"); err2 != nil {
+		return fmt.Errorf("cannot switch %q to AP mode: %s", ap, strings.TrimSpace(out2))
 	}
 	return nil
 }

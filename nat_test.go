@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -115,14 +116,21 @@ func natRunDir(t *testing.T) string {
 	return dir
 }
 
-// withMockNFT installs a mock, forces _isNFT to false, and returns a restore
-// function that also restores the original _isNFT value.
+// withMockNFT installs a mock runner, forces NFT detection to false (legacy
+// iptables mode), and returns a cleanup function that restores both.
+// It resets the lazy sync.Once so the mock's iptables --version response
+// is used when iptArgs() first calls isNFT() during the test.
 func withMockNFT(mock *MockRunner) func() {
 	restoreRunner := installMockRunner(mock)
-	origNFT := _isNFT
+	// Reset the lazy singleton so isNFT() re-runs with our mock in place.
+	_isNFTOnce = sync.Once{}
 	_isNFT = false
+	// Stub iptables --version to return legacy (non-nft) output so -w is kept.
+	mock.stub("iptables v1.8 (legacy)", nil, "iptables", "--version")
 	return func() {
-		_isNFT = origNFT
+		// Reset again on cleanup so subsequent tests start fresh.
+		_isNFTOnce = sync.Once{}
+		_isNFT = false
 		restoreRunner()
 	}
 }

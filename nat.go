@@ -1,6 +1,3 @@
-// Package main implements the routerd daemon — a single-binary tool that turns
-// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
-// and transparent WireGuard VPN gateway.
 package main
 
 import (
@@ -9,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // iptables command names.
@@ -20,14 +18,25 @@ const (
 // isNFTables returns true if iptables is backed by nf_tables (xtables-nft-multi).
 // iptables-nft does not support the -w (wait/lock) flag — passing it causes
 // exit status 4 on certain table/chain operations.
-var _isNFT = func() bool {
-	out, _ := runCmd("iptables", "--version")
-	return strings.Contains(out, "nf_tables") || strings.Contains(out, "nft")
-}()
+//
+// The value is computed once on first use (lazy) rather than at init time so
+// that tests can swap defaultRunner before the detection query runs.
+var (
+	_isNFT     bool
+	_isNFTOnce sync.Once
+)
+
+func isNFT() bool {
+	_isNFTOnce.Do(func() {
+		out, _ := runCmd("iptables", "--version")
+		_isNFT = strings.Contains(out, "nf_tables") || strings.Contains(out, "nft")
+	})
+	return _isNFT
+}
 
 // iptArgs builds an iptables argument list, stripping -w on nft-based systems.
 func iptArgs(args ...string) []string {
-	if !_isNFT {
+	if !isNFT() {
 		return args
 	}
 	out := make([]string, 0, len(args))
