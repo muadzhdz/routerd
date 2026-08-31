@@ -1,3 +1,6 @@
+// Package main implements the routerd daemon — a single-binary tool that turns
+// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
+// and transparent WireGuard VPN gateway.
 package main
 
 import (
@@ -10,7 +13,9 @@ import (
 
 const defaultConfigPath = "/etc/routerd.conf"
 
-// Config holds the runtime configuration of routerd.
+// Config holds the runtime configuration of the routerd daemon.
+// All fields are populated by LoadConfig; zero values are safe defaults
+// (use DefaultConfig to obtain a pre-filled baseline).
 type Config struct {
 	SSID          string
 	Password      string
@@ -46,6 +51,7 @@ type Config struct {
 }
 
 // DefaultConfig returns a Config populated with safe default values.
+// It is used as the base for LoadConfig and as fallback in error paths.
 func DefaultConfig() *Config {
 	return &Config{
 		SSID:          "routerd",
@@ -102,8 +108,9 @@ func sanitizeSSID(s string) string {
 	return b.String()
 }
 
-// LoadConfig reads the KEY=VALUE config file. Missing files fall back to
-// defaults; unknown keys are ignored.
+// LoadConfig reads a KEY=VALUE configuration file at path.
+// Missing files fall back silently to DefaultConfig.
+// Returns an error if SSID is empty or if PASSWORD length is not in [8, 63].
 func LoadConfig(path string) (*Config, error) {
 	cfg := DefaultConfig()
 	if path == "" {

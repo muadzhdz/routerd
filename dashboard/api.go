@@ -174,6 +174,16 @@ func (s *Server) handleConfigGet(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleConfigPost(w http.ResponseWriter, r *http.Request) {
+	// Rate limit: reject saves within 2 seconds of the last save.
+	s.muConfigSave.Lock()
+	if !s.lastConfigSave.IsZero() && time.Since(s.lastConfigSave) < 2*time.Second {
+		s.muConfigSave.Unlock()
+		w.Header().Set("Retry-After", "2")
+		jsonError(w, "too many requests — wait 2 seconds between saves", http.StatusTooManyRequests)
+		return
+	}
+	s.muConfigSave.Unlock()
+
 	var body struct {
 		Content string `json:"content"`
 	}
@@ -189,6 +199,9 @@ func (s *Server) handleConfigPost(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, fmt.Sprintf("cannot write config: %v", err), http.StatusInternalServerError)
 		return
 	}
+	s.muConfigSave.Lock()
+	s.lastConfigSave = time.Now()
+	s.muConfigSave.Unlock()
 	writeJSON(w, ActionResponse{OK: true, Message: "Config saved. Use Reload to apply changes."})
 }
 
@@ -284,6 +297,11 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		jsonError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	validActions := map[string]bool{"reload": true, "stop": true, "start": true}
+	if !validActions[body.Action] {
+		jsonError(w, "invalid action", http.StatusBadRequest)
 		return
 	}
 	switch body.Action {

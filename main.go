@@ -1,9 +1,11 @@
+// Package main implements the routerd daemon — a single-binary tool that turns
+// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
+// and transparent WireGuard VPN gateway.
 package main
 
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -20,9 +22,6 @@ import (
 
 const version = "0.1.0"
 const runDir = "/run/routerd"
-
-// pidFile is the lock file that prevents multiple routerd instances.
-const pidFile = "/run/routerd/routerd.pid"
 
 var configPath = defaultConfigPath
 
@@ -56,108 +55,6 @@ Examples:
   sudo routerd dashboard
   sudo routerd warp-setup
   sudo routerd -c /etc/routerd.conf start`)
-}
-
-// --- PID lock ---------------------------------------------------------------
-
-// acquirePIDLock creates the PID file. Returns an error if another instance is
-// already running.
-func acquirePIDLock() error {
-	if err := os.MkdirAll(runDir, 0755); err != nil {
-		return err
-	}
-	// Check if stale PID file exists from a previously crashed instance.
-	if data, err := os.ReadFile(pidFile); err == nil {
-		pid, _ := strconv.Atoi(strings.TrimSpace(string(data)))
-		if pid > 0 {
-			// Check if the process is actually alive.
-			if proc, err := os.FindProcess(pid); err == nil {
-				if err := proc.Signal(syscall.Signal(0)); err == nil {
-					return fmt.Errorf("routerd is already running (pid %d). Run 'routerd stop' first", pid)
-				}
-			}
-			// Stale PID file — remove it.
-			logWarn("removing stale PID file (pid %d no longer running)", pid)
-			_ = os.Remove(pidFile)
-		}
-	}
-	return os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0600)
-}
-
-func releasePIDLock() {
-	_ = os.Remove(pidFile)
-}
-
-// --- State persistence ------------------------------------------------------
-
-// State holds the runtime state written to disk so other commands (status,
-// reload, stop) can read it.
-type State struct {
-	SSID         string
-	InterfaceAP  string
-	InterfaceSTA string
-	Uplink       string
-	Channel      int
-	Band         string
-	Subnet       string
-	VPNMode      string
-	VPNActive    bool
-	StartTime    int64 // Unix timestamp of daemon start
-}
-
-func writeState(s State) {
-	_ = os.MkdirAll(runDir, 0755)
-	var b strings.Builder
-	fmt.Fprintf(&b, "SSID=%s\n", s.SSID)
-	fmt.Fprintf(&b, "INTERFACE_AP=%s\n", s.InterfaceAP)
-	fmt.Fprintf(&b, "INTERFACE_STA=%s\n", s.InterfaceSTA)
-	fmt.Fprintf(&b, "UPLINK=%s\n", s.Uplink)
-	fmt.Fprintf(&b, "CHANNEL=%d\n", s.Channel)
-	fmt.Fprintf(&b, "BAND=%s\n", s.Band)
-	fmt.Fprintf(&b, "SUBNET=%s\n", s.Subnet)
-	fmt.Fprintf(&b, "VPN_MODE=%s\n", s.VPNMode)
-	fmt.Fprintf(&b, "VPN_ACTIVE=%t\n", s.VPNActive)
-	fmt.Fprintf(&b, "START_TIME=%d\n", s.StartTime)
-	if err := os.WriteFile(filepath.Join(runDir, "state"), []byte(b.String()), 0644); err != nil {
-		logWarn("cannot write state file: %v", err)
-	}
-}
-
-func readState() (State, bool) {
-	var s State
-	data, err := os.ReadFile(filepath.Join(runDir, "state"))
-	if err != nil {
-		return s, false
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		key, val, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		switch key {
-		case "SSID":
-			s.SSID = val
-		case "INTERFACE_AP":
-			s.InterfaceAP = val
-		case "INTERFACE_STA":
-			s.InterfaceSTA = val
-		case "UPLINK":
-			s.Uplink = val
-		case "CHANNEL":
-			s.Channel, _ = strconv.Atoi(val)
-		case "BAND":
-			s.Band = val
-		case "SUBNET":
-			s.Subnet = val
-		case "VPN_MODE":
-			s.VPNMode = val
-		case "VPN_ACTIVE":
-			s.VPNActive = parseBool(val)
-		case "START_TIME":
-			s.StartTime, _ = strconv.ParseInt(val, 10, 64)
-		}
-	}
-	return s, s.InterfaceAP != ""
 }
 
 // --- Process health ---------------------------------------------------------
@@ -232,13 +129,19 @@ func cmdStart() {
 		}
 	}()
 
+	// Item 7: context-based cancellation — replaces sig channel + signal.Notify.
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
+
 	sta, err := findSTAInterface(cfg)
 	if err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 	uplink, err := detectUplink(cfg, sta)
 	if err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 	if cfg.Uplink == "" || cfg.Uplink == "auto" {
 		cfg.Uplink = uplink
@@ -246,7 +149,8 @@ func cmdStart() {
 
 	activeUplink, err := startVPN(cfg, runDir)
 	if err != nil {
-		log.Fatalf("VPN setup error: %v", err)
+		logWarn("VPN setup error: %v", err)
+		return
 	}
 
 	var ch int
@@ -254,13 +158,15 @@ func cmdStart() {
 	if cfg.Channel == "" || cfg.Channel == "auto" {
 		ch, band, err = detectChannel(sta)
 		if err != nil {
-			log.Fatalf("%v", err)
+			logWarn("%v", err)
+			return
 		}
 		logInfo("auto-detected channel %d (%s band) from %s", ch, band, sta)
 	} else {
 		ch, err = strconv.Atoi(cfg.Channel)
 		if err != nil || ch < 1 || ch > 165 {
-			log.Fatalf("invalid CHANNEL %q (use auto or 1-165)", cfg.Channel)
+			logWarn("invalid CHANNEL %q (use auto or 1-165)", cfg.Channel)
+			return
 		}
 		if ch <= 14 {
 			band = "g"
@@ -279,30 +185,48 @@ func cmdStart() {
 
 	gwCIDR, err := gatewayCIDR(cfg.Subnet)
 	if err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 
 	if err := createAPInterface(sta, cfg.InterfaceAP, cfg.RandomMAC); err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 	if err := interfaceUp(cfg.InterfaceAP); err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 	setUnmanaged(cfg.InterfaceAP)
 
 	if err := startHostapd(cfg, ch, band, runDir); err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 	if err := addrAdd(cfg.InterfaceAP, gwCIDR); err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
 	if err := startDnsmasq(cfg, runDir); err != nil {
-		log.Fatalf("%v", err)
+		logWarn("%v", err)
+		return
 	}
-	if err := enableNAT(runDir, activeUplink, cfg.InterfaceAP,
-		cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6,
-		cfg.LimitRateMbps, cfg.EnableVPN, cfg.VPNKillSwitch, cfg.VPNDNS, cfg.DPIBypass); err != nil {
-		log.Fatalf("%v", err)
+	if err := enableNAT(NATConfig{
+		RunDir:        runDir,
+		Uplink:        activeUplink,
+		AP:            cfg.InterfaceAP,
+		IsolateHost:   cfg.IsolateHost,
+		SpoofTTL:      cfg.SpoofTTL,
+		TorMode:       cfg.TorMode,
+		DisableIPv6:   cfg.DisableIPv6,
+		LimitRateMbps: cfg.LimitRateMbps,
+		EnableVPN:     cfg.EnableVPN,
+		VPNKillSwitch: cfg.VPNKillSwitch,
+		VPNDNS:        cfg.VPNDNS,
+		DPIBypass:     cfg.DPIBypass,
+	}); err != nil {
+		logWarn("%v", err)
+		return
 	}
 
 	writeState(State{
@@ -317,17 +241,32 @@ func cmdStart() {
 		cfg.SSID, ch, band, cfg.InterfaceAP, sta, activeUplink, cfg.Subnet, cfg.MaxClients,
 		cfg.RandomMAC, cfg.IsolateHost, cfg.EnableVPN, cfg.VPNMode, cfg.VPNKillSwitch, cfg.VPNDNS)
 
-	// Start watchdogs that trigger a graceful shutdown if hostapd or dnsmasq crash.
-	sig := make(chan os.Signal, 2)
-	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	// Auto-start dashboard if enabled in config (passes ctx so it shuts down with the daemon).
+	if cfg.DashboardEnabled {
+		vpnConfPath := cfg.VPNConfig
+		if vpnConfPath == "" {
+			vpnConfPath = "/etc/routerd/vpn.conf"
+		}
+		dashSrv := dashboard.NewServer(
+			configPath, vpnConfPath, runDir, version,
+			cfg.DashboardBind, cfg.DashboardPassword, cfg.DashboardPort,
+		)
+		go func() {
+			logInfo("dashboard auto-started on http://%s:%d", cfg.DashboardBind, cfg.DashboardPort)
+			if err := dashSrv.Run(ctx); err != nil && err.Error() != "http: Server closed" {
+				logWarn("dashboard: %v", err)
+			}
+		}()
+	}
 
+	// Watchdogs: cancel the context (graceful shutdown) if hostapd or dnsmasq crash.
 	procMgr.watchdog("hostapd", func(name string) {
 		logWarn("watchdog triggered cleanup due to %s crash", name)
-		sig <- syscall.SIGTERM
+		cancel()
 	})
 	procMgr.watchdog("dnsmasq", func(name string) {
 		logWarn("watchdog triggered cleanup due to %s crash", name)
-		sig <- syscall.SIGTERM
+		cancel()
 	})
 
 	// Write clients.json periodically so the dashboard can read it without root.
@@ -337,7 +276,7 @@ func cmdStart() {
 		defer t.Stop()
 		for {
 			select {
-			case <-sig:
+			case <-ctx.Done():
 				return
 			case <-t.C:
 				writeClients(cfg.InterfaceAP, runDir)
@@ -345,7 +284,7 @@ func cmdStart() {
 		}
 	}()
 
-	<-sig
+	<-ctx.Done()
 	logInfo("shutting down")
 	cleanup(cfg)
 	logInfo("stopped")
@@ -407,8 +346,11 @@ func cmdStatus() {
 	}
 }
 
-// cmdReload performs a full reload: restarts hostapd, dnsmasq, and re-applies
-// all NAT rules so config changes (VPN, isolation, DNS, etc.) take effect.
+// cmdReload performs a full atomic reload: restarts hostapd, dnsmasq, and
+// re-applies all NAT rules so config changes (VPN, isolation, DNS, etc.) take
+// effect. If any step fails after teardown, it attempts to restore the old
+// state rather than calling full cleanup (which would destroy the AP interface
+// and leak the routing setup into an unknown state).
 func cmdReload() {
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
@@ -418,6 +360,10 @@ func cmdReload() {
 	if !ok {
 		log.Fatalf("routerd is not running (no state found)")
 	}
+
+	// --- Snapshot old state for rollback ------------------------------------
+	oldSt := st
+	oldVPNStarted, _ := os.ReadFile(filepath.Join(runDir, "vpn_started"))
 
 	ch, band := st.Channel, st.Band
 	if cfg.Channel == "" || cfg.Channel == "auto" {
@@ -440,43 +386,120 @@ func cmdReload() {
 		}
 	}
 
-	// Tear down existing processes and NAT rules fully.
+	// --- Teardown (point of no return) --------------------------------------
 	stopProcs()
 	killOrphans()
 	disableNAT(runDir, st.InterfaceAP)
 
-	// Re-apply VPN (may have changed).
+	// reloadFailed is called when a step after teardown fails. It attempts to
+	// restore processes and NAT rules using the old (pre-reload) config so the
+	// daemon stays functional. Full cleanup is intentionally NOT called here
+	// because that would destroy the AP interface itself.
+	reloadFailed := func(step string, stepErr error) {
+		logWarn("reload failed at %s: %v — attempting restore with old config", step, stepErr)
+
+		// Rebuild an old-compatible Config for hostapd/dnsmasq/NAT restart.
+		oldCfg, cfgErr := LoadConfig(configPath)
+		if cfgErr != nil {
+			oldCfg = cfg // best effort: use new cfg as base
+		}
+		oldCfg.SSID = oldSt.SSID
+		oldCfg.InterfaceAP = oldSt.InterfaceAP
+		oldCfg.InterfaceSTA = oldSt.InterfaceSTA
+		oldCfg.Subnet = oldSt.Subnet
+		oldCfg.Channel = strconv.Itoa(oldSt.Channel)
+		oldCfg.EnableVPN = oldSt.VPNActive
+		oldCfg.VPNMode = oldSt.VPNMode
+
+		// Restore vpn_started marker so stopVPN/startVPN work correctly.
+		if len(oldVPNStarted) > 0 {
+			_ = os.WriteFile(filepath.Join(runDir, "vpn_started"), oldVPNStarted, 0600)
+		}
+
+		restoreUplink, vpnErr := startVPN(oldCfg, runDir)
+		if vpnErr != nil {
+			logWarn("restore: VPN restart failed: %v", vpnErr)
+			restoreUplink = oldSt.Uplink
+		}
+		oldCfg.Uplink = restoreUplink
+
+		if hErr := startHostapd(oldCfg, oldSt.Channel, oldSt.Band, runDir); hErr != nil {
+			logWarn("restore: hostapd restart failed: %v", hErr)
+		}
+		if gwCIDR, gErr := gatewayCIDR(oldSt.Subnet); gErr == nil {
+			if aErr := addrAdd(oldSt.InterfaceAP, gwCIDR); aErr != nil {
+				logWarn("restore: addrAdd failed: %v", aErr)
+			}
+		}
+		if dErr := startDnsmasq(oldCfg, runDir); dErr != nil {
+			logWarn("restore: dnsmasq restart failed: %v", dErr)
+		}
+		if nErr := enableNAT(NATConfig{
+			RunDir:        runDir,
+			Uplink:        restoreUplink,
+			AP:            oldSt.InterfaceAP,
+			IsolateHost:   oldCfg.IsolateHost,
+			SpoofTTL:      oldCfg.SpoofTTL,
+			TorMode:       oldCfg.TorMode,
+			DisableIPv6:   oldCfg.DisableIPv6,
+			LimitRateMbps: oldCfg.LimitRateMbps,
+			EnableVPN:     oldCfg.EnableVPN,
+			VPNKillSwitch: oldCfg.VPNKillSwitch,
+			VPNDNS:        oldCfg.VPNDNS,
+			DPIBypass:     oldCfg.DPIBypass,
+		}); nErr != nil {
+			logWarn("restore: NAT re-enable failed: %v", nErr)
+		}
+		writeState(oldSt)
+		logWarn("restore complete — running with old config (ssid=%q channel=%d)", oldSt.SSID, oldSt.Channel)
+	}
+
+	// --- Bring up new config ------------------------------------------------
 	cfg.InterfaceSTA = st.InterfaceSTA
 	activeUplink, err := startVPN(cfg, runDir)
 	if err != nil {
-		log.Fatalf("reload VPN error: %v", err)
+		reloadFailed("startVPN", err)
+		return
 	}
 	cfg.Uplink = activeUplink
 
 	if err := startHostapd(cfg, ch, band, runDir); err != nil {
-		cleanup(cfg)
-		log.Fatalf("reload failed: %v", err)
+		reloadFailed("startHostapd", err)
+		return
 	}
 
-	if gwCIDR, err := gatewayCIDR(cfg.Subnet); err != nil {
-		cleanup(cfg)
-		log.Fatalf("reload failed: %v", err)
-	} else if err := addrAdd(cfg.InterfaceAP, gwCIDR); err != nil {
-		cleanup(cfg)
-		log.Fatalf("reload failed: %v", err)
+	gwCIDR, err := gatewayCIDR(cfg.Subnet)
+	if err != nil {
+		reloadFailed("gatewayCIDR", err)
+		return
+	}
+	if err := addrAdd(cfg.InterfaceAP, gwCIDR); err != nil {
+		reloadFailed("addrAdd", err)
+		return
 	}
 
 	if err := startDnsmasq(cfg, runDir); err != nil {
-		cleanup(cfg)
-		log.Fatalf("reload failed: %v", err)
+		reloadFailed("startDnsmasq", err)
+		return
 	}
 
 	// Re-apply all NAT rules with the (possibly updated) config.
-	if err := enableNAT(runDir, activeUplink, cfg.InterfaceAP,
-		cfg.IsolateHost, cfg.SpoofTTL, cfg.TorMode, cfg.DisableIPv6,
-		cfg.LimitRateMbps, cfg.EnableVPN, cfg.VPNKillSwitch, cfg.VPNDNS, cfg.DPIBypass); err != nil {
-		cleanup(cfg)
-		log.Fatalf("reload NAT failed: %v", err)
+	if err := enableNAT(NATConfig{
+		RunDir:        runDir,
+		Uplink:        activeUplink,
+		AP:            cfg.InterfaceAP,
+		IsolateHost:   cfg.IsolateHost,
+		SpoofTTL:      cfg.SpoofTTL,
+		TorMode:       cfg.TorMode,
+		DisableIPv6:   cfg.DisableIPv6,
+		LimitRateMbps: cfg.LimitRateMbps,
+		EnableVPN:     cfg.EnableVPN,
+		VPNKillSwitch: cfg.VPNKillSwitch,
+		VPNDNS:        cfg.VPNDNS,
+		DPIBypass:     cfg.DPIBypass,
+	}); err != nil {
+		reloadFailed("enableNAT", err)
+		return
 	}
 
 	st.SSID = cfg.SSID
@@ -533,89 +556,6 @@ func cmdLogs() {
 	tailFile(dnsmasqLog, "dnsmasq")
 }
 
-// writeClients writes the current connected client list to /run/routerd/clients.json
-// so the dashboard can read it without needing root/iw access.
-func writeClients(ap, runDir string) {
-	type clientEntry struct {
-		MAC      string `json:"mac"`
-		IP       string `json:"ip"`
-		Hostname string `json:"hostname"`
-		Signal   int    `json:"signal"`
-		TxRate   string `json:"tx_rate"`
-	}
-
-	out, err := runCmd("iw", "dev", ap, "station", "dump")
-	if err != nil {
-		return
-	}
-
-	// Read leases for IP resolution.
-	leases := make(map[string]string)
-	hostnames := make(map[string]string)
-	for _, path := range []string{
-		filepath.Join(runDir, "dnsmasq.leases"),
-		"/var/lib/misc/dnsmasq.leases",
-	} {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(string(data), "\n") {
-			f := strings.Fields(line)
-			if len(f) >= 3 {
-				mac := strings.ToLower(f[1])
-				leases[mac] = f[2]
-				if len(f) >= 4 && f[3] != "*" {
-					hostnames[mac] = f[3]
-				}
-			}
-		}
-		break
-	}
-
-	var clients []clientEntry
-	var cur *clientEntry
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Station ") {
-			if cur != nil {
-				clients = append(clients, *cur)
-			}
-			parts := strings.Fields(line)
-			mac := ""
-			if len(parts) >= 2 {
-				mac = strings.ToLower(parts[1])
-			}
-			ip := leases[mac]
-			if ip == "" {
-				ip = "(no lease)"
-			}
-			cur = &clientEntry{MAC: mac, IP: ip, Hostname: hostnames[mac]}
-		} else if cur != nil {
-			if strings.HasPrefix(line, "tx bitrate:") {
-				cur.TxRate = strings.TrimSpace(strings.TrimPrefix(line, "tx bitrate:"))
-			}
-			if strings.HasPrefix(line, "signal:") {
-				var sig int
-				fmt.Sscan(strings.TrimSpace(strings.TrimPrefix(line, "signal:")), &sig)
-				cur.Signal = sig
-			}
-		}
-	}
-	if cur != nil {
-		clients = append(clients, *cur)
-	}
-	if clients == nil {
-		clients = []clientEntry{}
-	}
-
-	b, err := json.Marshal(clients)
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(filepath.Join(runDir, "clients.json"), b, 0600)
-}
-
 func cmdDashboard() {
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
@@ -657,109 +597,6 @@ func cmdWarpSetup() {
 	}
 	fmt.Printf("Generated WARP WireGuard profile template at %s\n", target)
 	fmt.Println("Fill in your WireGuard keys/endpoints in /etc/routerd/vpn.conf and set ENABLE_VPN=true in /etc/routerd.conf")
-}
-
-// --- Client list helpers ----------------------------------------------------
-
-// Client holds a connected station's MAC and IP address.
-type Client struct {
-	MAC string
-	IP  string
-}
-
-// listStations returns connected clients from iw + dnsmasq lease file.
-func listStations(ap, runDir string) []Client {
-	out, err := runCmd("iw", "dev", ap, "station", "dump")
-	if err != nil {
-		return nil
-	}
-	// Build MAC list from station dump.
-	var macs []string
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Station ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				macs = append(macs, strings.ToLower(parts[1]))
-			}
-		}
-	}
-	if len(macs) == 0 {
-		return nil
-	}
-
-	// Build MAC→IP map from dnsmasq leases.
-	leaseMap := parseDnsmasqLeases(runDir)
-
-	clients := make([]Client, 0, len(macs))
-	for _, mac := range macs {
-		ip := leaseMap[mac]
-		if ip == "" {
-			ip = "(no lease)"
-		}
-		clients = append(clients, Client{MAC: mac, IP: ip})
-	}
-	return clients
-}
-
-// parseDnsmasqLeases reads /run/routerd/dnsmasq.leases (if present) and
-// returns a map of lowercase MAC → IP.
-func parseDnsmasqLeases(runDir string) map[string]string {
-	m := make(map[string]string)
-	data, err := os.ReadFile(filepath.Join(runDir, "dnsmasq.leases"))
-	if err != nil {
-		// Try default dnsmasq lease path.
-		data, err = os.ReadFile("/var/lib/misc/dnsmasq.leases")
-		if err != nil {
-			return m
-		}
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 3 {
-			mac := strings.ToLower(fields[1])
-			ip := fields[2]
-			m[mac] = ip
-		}
-	}
-	return m
-}
-
-// vpnEndpoint tries to read the WireGuard endpoint from `wg show`.
-func vpnEndpoint(iface string) string {
-	out, err := runCmd("wg", "show", iface, "endpoints")
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[1] != "(none)" {
-			return " " + fields[1]
-		}
-	}
-	return ""
-}
-
-// uptimeSince formats duration since a Unix timestamp as "Xh Ym Zs".
-func uptimeSince(startUnix int64) string {
-	secs := time.Now().Unix() - startUnix
-	if secs < 0 {
-		secs = 0
-	}
-	h := secs / 3600
-	m := (secs % 3600) / 60
-	s := secs % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
-	}
-	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
-	}
-	return fmt.Sprintf("%ds", s)
-}
-
-func timeNow() int64 {
-	return time.Now().Unix()
 }
 
 // --- Entry point ------------------------------------------------------------

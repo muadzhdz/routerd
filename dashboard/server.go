@@ -5,7 +5,6 @@ package dashboard
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -16,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -157,9 +155,11 @@ type Server struct {
 	bind        string
 	port        int
 
-	hub      *wsHub
-	sessions *sessionStore
-	limiter  *loginLimiter
+	hub            *wsHub
+	sessions       *sessionStore
+	limiter        *loginLimiter
+	lastConfigSave time.Time
+	muConfigSave   sync.Mutex
 }
 
 // NewServer constructs a Server from the provided parameters.
@@ -196,7 +196,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/ws", s.handleWS)
 
 	// Wrap everything with auth middleware (login page is exempted inside).
-	handler := s.authMiddleware(corsMiddleware(mux))
+	handler := securityHeadersMiddleware(s.authMiddleware(corsMiddleware(mux)))
 
 	addr := fmt.Sprintf("%s:%d", s.bind, s.port)
 	srv := &http.Server{
@@ -337,6 +337,22 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge: -1,
 	})
 	http.Redirect(w, r, "/login.html", http.StatusFound)
+}
+
+// securityHeadersMiddleware sets HTTP security headers on every response.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self' cdn.jsdelivr.net; "+
+				"style-src 'self' https://fonts.googleapis.com; "+
+				"font-src 'self' https://fonts.gstatic.com; "+
+				"connect-src 'self' ws: wss:")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // --- CORS middleware (for dev/API access) ------------------------------------
@@ -607,27 +623,6 @@ func parseDnsmasqLeases(runDir string) map[string]string {
 		break
 	}
 	return m
-}
-
-// runCmdOut runs a command and returns combined stdout+stderr.
-func runCmdOut(name string, args ...string) (string, error) {
-	var buf bytes.Buffer
-	cmd := exec.Command(name, args...)
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	err := cmd.Run()
-	return buf.String(), err
-}
-
-// runCmdDir runs a command in a specific directory.
-func runCmdDir(dir, name string, args ...string) (string, error) {
-	var buf bytes.Buffer
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	err := cmd.Run()
-	return buf.String(), err
 }
 
 // runSystemctl executes a systemctl command.

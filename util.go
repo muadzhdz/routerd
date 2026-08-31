@@ -1,39 +1,28 @@
+// Package main implements the routerd daemon — a single-binary tool that turns
+// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
+// and transparent WireGuard VPN gateway.
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
+// runCmd executes name with args via the global defaultRunner and returns
+// combined stdout+stderr output. Tests may replace defaultRunner with a
+// MockRunner to capture calls without spawning real processes.
 func runCmd(name string, args ...string) (string, error) {
-	var out bytes.Buffer
-	cmd := exec.Command(name, args...)
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	if err := cmd.Run(); err != nil {
-		return out.String(), err
-	}
-	return out.String(), nil
+	return defaultRunner.Run(name, args...)
 }
 
-// runCmdDir runs a command in the specified working directory.
+// runCmdDir executes name with args in dir via the global defaultRunner.
 func runCmdDir(dir, name string, args ...string) (string, error) {
-	var out bytes.Buffer
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	if err := cmd.Run(); err != nil {
-		return out.String(), err
-	}
-	return out.String(), nil
+	return defaultRunner.RunDir(dir, name, args...)
 }
 
 func fileExists(p string) bool {

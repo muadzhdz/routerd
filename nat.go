@@ -1,3 +1,6 @@
+// Package main implements the routerd daemon — a single-binary tool that turns
+// any Linux machine with a Wi-Fi card into a stealth Wi-Fi access point, router,
+// and transparent WireGuard VPN gateway.
 package main
 
 import (
@@ -313,14 +316,29 @@ func setupMangleRules(ap string, spoofTTL int, mssClamping bool) {
 	}
 }
 
+// NATConfig holds all parameters needed to configure NAT and firewall rules.
+type NATConfig struct {
+	RunDir        string
+	Uplink        string
+	AP            string
+	IsolateHost   bool
+	SpoofTTL      int
+	TorMode       bool
+	DisableIPv6   bool
+	LimitRateMbps int
+	EnableVPN     bool
+	VPNKillSwitch bool
+	VPNDNS        string
+	DPIBypass     bool
+}
+
 // --- Public API --------------------------------------------------------------
 
 // enableNAT saves the current forwarding state and installs all iptables rules.
-func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMode bool,
-	disableIPv6 bool, limitRateMbps int, enableVPN bool, vpnKillSwitch bool, vpnDNS string, dpiBypass bool) error {
+func enableNAT(cfg NATConfig) error {
 
 	// Persist current ip_forward value so cleanup can restore it.
-	if err := os.WriteFile(filepath.Join(runDir, "ip_forward.orig"),
+	if err := os.WriteFile(filepath.Join(cfg.RunDir, "ip_forward.orig"),
 		[]byte(readIPForward()), 0600); err != nil {
 		return fmt.Errorf("cannot save ip_forward state: %w", err)
 	}
@@ -329,40 +347,40 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 	}
 
 	// 1. IPv6 leak protection.
-	if disableIPv6 {
-		setupIPv6LeakProtection(ap)
+	if cfg.DisableIPv6 {
+		setupIPv6LeakProtection(cfg.AP)
 	}
 
 	// 2. VPN policy routing (saves rp_filter originals to runDir).
 	// Not applied for dpibypass — there is no VPN tunnel interface.
-	if enableVPN {
-		setupVPNRouting(ap, runDir)
+	if cfg.EnableVPN {
+		setupVPNRouting(cfg.AP, cfg.RunDir)
 	}
 
 	// 3. DNS interception: Tor mode OR forced VPN DNS.
 	// Not applied for dpibypass — traffic goes out on normal uplink.
-	if torMode {
-		if err := setupTorRules(ap); err != nil {
+	if cfg.TorMode {
+		if err := setupTorRules(cfg.AP); err != nil {
 			return err
 		}
-	} else if enableVPN {
-		setupVPNDNSRules(ap, vpnDNS)
+	} else if cfg.EnableVPN {
+		setupVPNDNSRules(cfg.AP, cfg.VPNDNS)
 	}
 
 	// 4. NAT POSTROUTING masquerade.
-	if err := setupMasquerade(uplink); err != nil {
+	if err := setupMasquerade(cfg.Uplink); err != nil {
 		return err
 	}
 
 	// 5. FORWARD chain with optional kill-switch.
 	// Kill-switch is only meaningful when there is an actual VPN tunnel.
-	if err := setupForwardRules(ap, uplink, enableVPN, vpnKillSwitch); err != nil {
+	if err := setupForwardRules(cfg.AP, cfg.Uplink, cfg.EnableVPN, cfg.VPNKillSwitch); err != nil {
 		return err
 	}
 
 	// 6. Host isolation (INPUT chain).
-	if isolateHost {
-		if err := setupHostIsolation(ap); err != nil {
+	if cfg.IsolateHost {
+		if err := setupHostIsolation(cfg.AP); err != nil {
 			return err
 		}
 	}
@@ -370,13 +388,13 @@ func enableNAT(runDir, uplink, ap string, isolateHost bool, spoofTTL int, torMod
 	// 7. Mangle: TTL spoofing & TCP MSS clamping.
 	// MSS clamping is active for VPN mode (to handle MTU reduction) AND
 	// for dpibypass mode (to help bypass stateful DPI).
-	mssClamping := enableVPN || dpiBypass
-	if spoofTTL > 0 || mssClamping {
-		setupMangleRules(ap, spoofTTL, mssClamping)
+	mssClamping := cfg.EnableVPN || cfg.DPIBypass
+	if cfg.SpoofTTL > 0 || mssClamping {
+		setupMangleRules(cfg.AP, cfg.SpoofTTL, mssClamping)
 	}
 
 	// 8. Bandwidth rate limiting.
-	setupRateLimit(ap, limitRateMbps)
+	setupRateLimit(cfg.AP, cfg.LimitRateMbps)
 
 	return nil
 }
