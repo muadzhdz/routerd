@@ -379,3 +379,185 @@ func TestHandleStatus_WithState(t *testing.T) {
 		t.Errorf("Subnet = %q, want '192.168.50.0/24'", resp.Subnet)
 	}
 }
+
+// --- TestHandleConfigPost_SavesFile ------------------------------------------
+
+func TestHandleConfigPost_SavesFile(t *testing.T) {
+	srv, dir := newTestServer(t, "")
+	srv.configPath = filepath.Join(dir, "routerd.conf")
+	h := buildHandler(srv)
+
+	newContent := "SSID=newnet\nPASSWORD=newpass1\n"
+	rr := postJSON(t, h, "/api/config", map[string]string{"content": newContent})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+
+	data, err := os.ReadFile(srv.configPath)
+	if err != nil {
+		t.Fatalf("config file not readable: %v", err)
+	}
+	if string(data) != newContent {
+		t.Errorf("saved config = %q, want %q", string(data), newContent)
+	}
+}
+
+// --- TestHandleConfigPost_EmptyContent ---------------------------------------
+
+func TestHandleConfigPost_EmptyContent(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	rr := postJSON(t, h, "/api/config", map[string]string{"content": ""})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty content, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// --- TestHandleVPN_Get -------------------------------------------------------
+
+func TestHandleVPN_Get(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	rr := getReq(t, h, "/api/vpn")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp VPNStatusResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// No state file → active should be false.
+	if resp.Active {
+		t.Error("expected active=false when no state file exists")
+	}
+}
+
+// --- TestHandleVPN_Post_SaveConf ---------------------------------------------
+
+func TestHandleVPN_Post_SaveConf(t *testing.T) {
+	srv, dir := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	vpnContent := "[Interface]\nPrivateKey = abc123\nAddress = 10.0.0.2/32\n"
+	rr := postJSON(t, h, "/api/vpn", map[string]string{
+		"action":  "save_conf",
+		"content": vpnContent,
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "vpn.conf"))
+	if err != nil {
+		t.Fatalf("vpn.conf not written: %v", err)
+	}
+	if string(data) != vpnContent {
+		t.Errorf("vpn.conf = %q, want %q", string(data), vpnContent)
+	}
+}
+
+// --- TestHandleVPN_Post_InvalidAction ----------------------------------------
+
+func TestHandleVPN_Post_InvalidAction(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	rr := postJSON(t, h, "/api/vpn", map[string]string{"action": "unknown"})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown vpn action, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// --- TestHandleLogs_Empty ----------------------------------------------------
+
+func TestHandleLogs_Empty(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	rr := getReq(t, h, "/api/logs")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	lines, ok := resp["lines"]
+	if !ok {
+		t.Fatal("expected 'lines' key in response")
+	}
+	// lines should be nil (empty) or an empty slice — the important thing is
+	// the key exists and we don't get an error.
+	switch v := lines.(type) {
+	case nil:
+		// OK — no log files present
+	case []interface{}:
+		if len(v) != 0 {
+			t.Errorf("expected empty lines array, got %d entries", len(v))
+		}
+	default:
+		// OK — JSON null decodes to nil
+	}
+}
+
+// --- TestHandleAction_InvalidMethod ------------------------------------------
+
+func TestHandleAction_InvalidMethod(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/action", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/action, got %d", rr.Code)
+	}
+}
+
+// --- TestHandleAction_InvalidAction ------------------------------------------
+
+func TestHandleAction_InvalidAction(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	rr := postJSON(t, h, "/api/action", map[string]string{"action": "hack"})
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid action, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// --- TestHandleKickClient_NoBody ---------------------------------------------
+
+func TestHandleKickClient_NoBody(t *testing.T) {
+	srv, _ := newTestServer(t, "")
+	h := buildHandler(srv)
+
+	// POST with empty MAC field.
+	rr := postJSON(t, h, "/api/client/kick", map[string]string{"mac": ""})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for kick with no MAC, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// --- TestHandleKickClient_NotRunning -----------------------------------------
+
+func TestHandleKickClient_NotRunning(t *testing.T) {
+	srv, _ := newTestServer(t, "") // no state file in tempdir → not running
+	h := buildHandler(srv)
+
+	rr := postJSON(t, h, "/api/client/kick", map[string]string{"mac": "aa:bb:cc:dd:ee:ff"})
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when routerd not running, got %d; body: %s", rr.Code, rr.Body.String())
+	}
+	var resp ActionResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.OK {
+		t.Error("expected ok=false when service unavailable")
+	}
+}

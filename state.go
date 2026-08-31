@@ -60,8 +60,11 @@ type State struct {
 	StartTime    int64 // Unix timestamp of daemon start
 }
 
-func writeState(s State) {
-	_ = os.MkdirAll(runDir, 0755)
+// writeStateTo writes state to a specific runDir (testable variant).
+func writeStateTo(s State, dir string) error {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "SSID=%s\n", s.SSID)
 	fmt.Fprintf(&b, "INTERFACE_AP=%s\n", s.InterfaceAP)
@@ -73,14 +76,13 @@ func writeState(s State) {
 	fmt.Fprintf(&b, "VPN_MODE=%s\n", s.VPNMode)
 	fmt.Fprintf(&b, "VPN_ACTIVE=%t\n", s.VPNActive)
 	fmt.Fprintf(&b, "START_TIME=%d\n", s.StartTime)
-	if err := os.WriteFile(filepath.Join(runDir, "state"), []byte(b.String()), 0644); err != nil {
-		logWarn("cannot write state file: %v", err)
-	}
+	return os.WriteFile(filepath.Join(dir, "state"), []byte(b.String()), 0644)
 }
 
-func readState() (State, bool) {
+// readStateFrom reads state from a specific runDir (testable variant).
+func readStateFrom(dir string) (State, bool) {
 	var s State
-	data, err := os.ReadFile(filepath.Join(runDir, "state"))
+	data, err := os.ReadFile(filepath.Join(dir, "state"))
 	if err != nil {
 		return s, false
 	}
@@ -113,6 +115,16 @@ func readState() (State, bool) {
 		}
 	}
 	return s, s.InterfaceAP != ""
+}
+
+func writeState(s State) {
+	if err := writeStateTo(s, runDir); err != nil {
+		logWarn("cannot write state file: %v", err)
+	}
+}
+
+func readState() (State, bool) {
+	return readStateFrom(runDir)
 }
 
 // --- writeClients -----------------------------------------------------------

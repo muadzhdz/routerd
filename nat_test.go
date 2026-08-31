@@ -413,3 +413,151 @@ func TestEnableNAT_TorRules(t *testing.T) {
 		t.Errorf("expected PREROUTING attach; calls:\n%s", dumpCalls(mock))
 	}
 }
+
+// --- TestIsAlreadyExists -----------------------------------------------------
+
+func TestIsAlreadyExists_True(t *testing.T) {
+	cases := []string{
+		"Chain already exists",
+		"already exists",
+		"Already exists: something",
+	}
+	for _, s := range cases {
+		if !isAlreadyExists(s) {
+			t.Errorf("isAlreadyExists(%q) = false, want true", s)
+		}
+	}
+}
+
+func TestIsAlreadyExists_False(t *testing.T) {
+	cases := []string{
+		"",
+		"no such table",
+		"Bad rule (do you need -t?)",
+		"exit status 1",
+	}
+	for _, s := range cases {
+		if isAlreadyExists(s) {
+			t.Errorf("isAlreadyExists(%q) = true, want false", s)
+		}
+	}
+}
+
+// --- TestAtoiSafe ------------------------------------------------------------
+
+func TestAtoiSafe_Valid(t *testing.T) {
+	if got := atoiSafe("42"); got != 42 {
+		t.Errorf("atoiSafe('42') = %d, want 42", got)
+	}
+}
+
+func TestAtoiSafe_Invalid(t *testing.T) {
+	if got := atoiSafe("abc"); got != 0 {
+		t.Errorf("atoiSafe('abc') = %d, want 0", got)
+	}
+}
+
+func TestAtoiSafe_Empty(t *testing.T) {
+	if got := atoiSafe(""); got != 0 {
+		t.Errorf("atoiSafe('') = %d, want 0", got)
+	}
+}
+
+// --- TestSetupRateLimit ------------------------------------------------------
+
+func TestSetupRateLimit_Zero(t *testing.T) {
+	mock := newMockRunner()
+	restore := installMockRunner(mock)
+	defer restore()
+
+	setupRateLimit("ap0", 0)
+
+	for _, c := range mock.calls {
+		if c.name == "tc" {
+			t.Errorf("expected no tc calls for mbps=0, got: %v %v", c.name, c.args)
+		}
+	}
+}
+
+func TestSetupRateLimit_Positive(t *testing.T) {
+	mock := newMockRunner()
+	restore := installMockRunner(mock)
+	defer restore()
+
+	setupRateLimit("ap0", 10)
+
+	if !mock.calledWithSubstr("tc", "qdisc", "add", "dev", "ap0") {
+		t.Errorf("expected 'tc qdisc add dev ap0' call; calls:\n%s", dumpCalls(mock))
+	}
+	if !mock.calledWithSubstr("10mbit") {
+		t.Errorf("expected '10mbit' rate in tc call; calls:\n%s", dumpCalls(mock))
+	}
+}
+
+// --- TestCleanupRateLimit ----------------------------------------------------
+
+func TestCleanupRateLimit_Empty(t *testing.T) {
+	mock := newMockRunner()
+	restore := installMockRunner(mock)
+	defer restore()
+
+	cleanupRateLimit("")
+
+	for _, c := range mock.calls {
+		if c.name == "tc" {
+			t.Errorf("expected no tc calls for empty ap, got: %v %v", c.name, c.args)
+		}
+	}
+}
+
+func TestCleanupRateLimit_Called(t *testing.T) {
+	mock := newMockRunner()
+	restore := installMockRunner(mock)
+	defer restore()
+
+	cleanupRateLimit("ap0")
+
+	if !mock.calledWith("tc", "qdisc", "del", "dev", "ap0", "root") {
+		t.Errorf("expected 'tc qdisc del dev ap0 root'; calls:\n%s", dumpCalls(mock))
+	}
+}
+
+// --- TestDisableNAT_CallsAllChains -------------------------------------------
+
+func TestDisableNAT_CallsAllChains(t *testing.T) {
+	mock := newMockRunner()
+	restore := withMockNFT(mock)
+	defer restore()
+
+	dir := natRunDir(t)
+	disableNAT(dir, "ap0")
+
+	// Verify flush/delete of all custom chains.
+	chains := []struct {
+		table string
+		chain string
+	}{
+		{"nat", natPreChain},
+		{"nat", natPostChain},
+		{"", fwdChain},
+		{"", inputChain},
+		{"mangle", mangleChain},
+	}
+	for _, ch := range chains {
+		if ch.table != "" {
+			if !mock.calledWithSubstr("iptables", "-t", ch.table, "-F", ch.chain) {
+				t.Errorf("expected iptables -t %s -F %s; calls:\n%s", ch.table, ch.chain, dumpCalls(mock))
+			}
+			if !mock.calledWithSubstr("iptables", "-t", ch.table, "-X", ch.chain) {
+				t.Errorf("expected iptables -t %s -X %s; calls:\n%s", ch.table, ch.chain, dumpCalls(mock))
+			}
+		} else {
+			if !mock.calledWithSubstr("iptables", "-F", ch.chain) {
+				t.Errorf("expected iptables -F %s; calls:\n%s", ch.chain, dumpCalls(mock))
+			}
+			if !mock.calledWithSubstr("iptables", "-X", ch.chain) {
+				t.Errorf("expected iptables -X %s; calls:\n%s", ch.chain, dumpCalls(mock))
+			}
+		}
+	}
+}
