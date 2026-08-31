@@ -8,9 +8,32 @@ After=network-online.target NetworkManager.service wpa_supplicant.service
 Type=simple
 ExecStart=/usr/local/bin/routerd start
 ExecReload=/usr/local/bin/routerd reload
+
+# Runtime directory pre-created by tmpfiles.d (/run/routerd)
+RuntimeDirectory=routerd
+RuntimeDirectoryMode=0700
+
+# Graceful shutdown: give routerd time to cleanup iptables + VPN
 TimeoutStopSec=20
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy: restart on unexpected exits, not on clean stops
 Restart=on-failure
 RestartSec=3
+
+# Security hardening — routerd needs root for iptables/iw/ip/wg-quick
+# but we lock down unnecessary surfaces
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=false
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_CHOWN
 
 [Install]
 WantedBy=multi-user.target

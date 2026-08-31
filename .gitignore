@@ -13,6 +13,7 @@ wgcf-profile.conf
 
 # test artifacts
 cover.out
+coverage.out
 *.test
 
 # editor

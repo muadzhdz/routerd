@@ -1,12 +1,42 @@
-# WireGuard VPN Configuration Profile Template for routerd
-# Copy this file to /etc/routerd/vpn.conf and fill in your keys.
+# WireGuard VPN Configuration Profile for routerd
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy this file to /etc/routerd/vpn.conf and fill in YOUR keys.
+# Set ENABLE_VPN=true in /etc/routerd.conf to activate.
+#
+# Quick setup options:
+#
+#  A) Cloudflare WARP (free, auto-generated):
+#       sudo routerd warp-setup
+#       → fills /etc/routerd/vpn.conf automatically
+#
+#  B) Mullvad / ProtonVPN / any WireGuard provider:
+#       Download the .conf file from your provider, copy it here.
+#
+#  C) Self-hosted WireGuard VPS:
+#       wg genkey | tee privatekey | wg pubkey > publickey
+#       Fill in the keys below manually.
+#
+# ─────────────────────────────────────────────────────────────────────────────
 
 [Interface]
-# PrivateKey = YOUR_PRIVATE_KEY
+# Your WireGuard private key (generate with: wg genkey)
+# PrivateKey = YOUR_PRIVATE_KEY_HERE
+
+# Tunnel IP address assigned by your VPN provider
 # Address = 172.16.0.2/32
+
+# DNS servers inside the tunnel (Cloudflare defaults — change for your provider)
 # DNS = 1.1.1.1, 1.0.0.1
 
 [Peer]
-# PublicKey = SERVER_PUBLIC_KEY
-# Endpoint = SERVER_IP:51820
+# Your VPN server's WireGuard public key
+# PublicKey = SERVER_PUBLIC_KEY_HERE
+
+# VPN server endpoint IP:port
+# Endpoint = YOUR_VPN_SERVER_IP:51820
+
+# Route ALL traffic through the VPN (0.0.0.0/0 = full tunnel)
 # AllowedIPs = 0.0.0.0/0, ::/0
+
+# Keep connection alive (recommended for NAT traversal)
+# PersistentKeepalive = 25
