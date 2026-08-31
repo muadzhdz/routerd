@@ -93,16 +93,26 @@ cmd_deps() {
         fi
     done
 
-    # Wordlist
+    # Wordlist — rockyou.txt tidak ada di Arch official repo, download manual
     if [[ ! -f /usr/share/wordlists/rockyou.txt ]]; then
-        warn "rockyou.txt tidak ditemukan"
-        mkdir -p /usr/share/wordlists
         if [[ -f /usr/share/wordlists/rockyou.txt.gz ]]; then
             info "Extracting rockyou.txt.gz..."
             gunzip -k /usr/share/wordlists/rockyou.txt.gz
             ok "rockyou.txt extracted"
         else
-            pkgs+=("wordlists")
+            warn "rockyou.txt tidak ditemukan di /usr/share/wordlists/"
+            info "Mendownload rockyou.txt (~134MB)..."
+            mkdir -p /usr/share/wordlists
+            if command -v curl &>/dev/null; then
+                curl -L --progress-bar \
+                    "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt" \
+                    -o /usr/share/wordlists/rockyou.txt && \
+                ok "rockyou.txt downloaded ke /usr/share/wordlists/" || \
+                warn "Download gagal. Manual: curl -L <url> -o /usr/share/wordlists/rockyou.txt"
+            else
+                warn "curl tidak tersedia. Install: sudo pacman -S curl"
+                info "Atau download manual dari: https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt"
+            fi
         fi
     else
         ok "rockyou.txt ada di /usr/share/wordlists/"
@@ -119,12 +129,6 @@ cmd_deps() {
 
     info "Menginstall: ${unique_pkgs[*]}"
     pacman -S --noconfirm --needed "${unique_pkgs[@]}"
-
-    # Post-install: extract wordlist jika baru diinstall
-    if [[ ! -f /usr/share/wordlists/rockyou.txt ]] && [[ -f /usr/share/wordlists/rockyou.txt.gz ]]; then
-        gunzip -k /usr/share/wordlists/rockyou.txt.gz
-        ok "rockyou.txt extracted ke /usr/share/wordlists/"
-    fi
 
     ok "Dependencies berhasil diinstall"
 }
