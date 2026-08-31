@@ -1,0 +1,28 @@
+# /etc/udev/rules.d/70-vwifi.rules
+#
+# Pin mac80211_hwsim virtual radio interface names so they are always:
+#   vwlan0 → AP radio (used by routerd with routerd-test.conf)
+#   vwlan1 → Client radio (used by wpa_supplicant)
+#   vwlan2 → Attacker/monitor radio (used by aircrack-ng suite)
+#
+# This prevents conflicts with physical wlan0 (RTL8822CE, phy0) and ensures
+# scripts can rely on predictable interface names regardless of load order.
+#
+# How it works:
+#   mac80211_hwsim sets DEVPATH under /devices/platform/hwsim[N], where N
+#   matches the radio index (0, 1, 2). We match on that path fragment.
+#
+# Apply changes without reboot:
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Verify after modprobe mac80211_hwsim radios=3:
+#   ip link show vwlan0 vwlan1 vwlan2
+
+# hwsim radio 0 → vwlan0 (AP radio for routerd testing)
+SUBSYSTEM=="net", ACTION=="add", DEVPATH=="*/mac80211_hwsim/hwsim0/*", NAME="vwlan0"
+
+# hwsim radio 1 → vwlan1 (client radio for wpa_supplicant)
+SUBSYSTEM=="net", ACTION=="add", DEVPATH=="*/mac80211_hwsim/hwsim1/*", NAME="vwlan1"
+
+# hwsim radio 2 → vwlan2 (attacker/monitor radio for aircrack-ng)
+SUBSYSTEM=="net", ACTION=="add", DEVPATH=="*/mac80211_hwsim/hwsim2/*", NAME="vwlan2"
