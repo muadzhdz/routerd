@@ -24,7 +24,6 @@ import (
 
 	"github.com/gorilla/websocket"
 )
-
 // --- Session store ----------------------------------------------------------
 
 const sessionCookieName = "routerd_session"
@@ -457,49 +456,17 @@ func hostapdRunning() bool {
 	return strings.TrimSpace(out) != ""
 }
 
-// listClients returns connected stations from iw + dnsmasq leases.
+// listClients reads the client list from /run/routerd/clients.json written by
+// the main routerd daemon (which runs as root with iw access).
+// Falls back to empty slice if the file is missing or unreadable.
 func listClients(ap, runDir string) []ClientInfo {
-	out, err := runCmdOut("iw", "dev", ap, "station", "dump")
+	data, err := os.ReadFile(filepath.Join(runDir, "clients.json"))
 	if err != nil {
 		return []ClientInfo{}
 	}
-
-	leases := parseDnsmasqLeases(runDir)
-	hostnames := parseDnsmasqHostnames(runDir)
-
 	var clients []ClientInfo
-	var current *ClientInfo
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Station ") {
-			if current != nil {
-				clients = append(clients, *current)
-			}
-			parts := strings.Fields(line)
-			mac := ""
-			if len(parts) >= 2 {
-				mac = strings.ToLower(parts[1])
-			}
-			current = &ClientInfo{
-				MAC:      mac,
-				IP:       leases[mac],
-				Hostname: hostnames[mac],
-			}
-			if current.IP == "" {
-				current.IP = "(no lease)"
-			}
-		} else if current != nil {
-			if strings.HasPrefix(line, "tx bitrate:") {
-				current.TxRate = strings.TrimPrefix(line, "tx bitrate:")
-				current.TxRate = strings.TrimSpace(current.TxRate)
-			}
-			if strings.HasPrefix(line, "signal:") {
-				fmt.Sscan(strings.TrimPrefix(strings.TrimSpace(line), "signal:"), &current.Signal)
-			}
-		}
-	}
-	if current != nil {
-		clients = append(clients, *current)
+	if err := json.Unmarshal(data, &clients); err != nil {
+		return []ClientInfo{}
 	}
 	if clients == nil {
 		return []ClientInfo{}
@@ -507,6 +474,7 @@ func listClients(ap, runDir string) []ClientInfo {
 	return clients
 }
 
+// parseDnsmasqLeases reads leases file and returns a map of lowercase MAC → IP.
 func parseDnsmasqLeases(runDir string) map[string]string {
 	m := make(map[string]string)
 	for _, path := range []string{
@@ -521,28 +489,6 @@ func parseDnsmasqLeases(runDir string) map[string]string {
 			f := strings.Fields(line)
 			if len(f) >= 3 {
 				m[strings.ToLower(f[1])] = f[2]
-			}
-		}
-		break
-	}
-	return m
-}
-
-func parseDnsmasqHostnames(runDir string) map[string]string {
-	m := make(map[string]string)
-	for _, path := range []string{
-		filepath.Join(runDir, "dnsmasq.leases"),
-		"/var/lib/misc/dnsmasq.leases",
-	} {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(string(data), "\n") {
-			f := strings.Fields(line)
-			// Format: <expiry> <mac> <ip> <hostname> <client-id>
-			if len(f) >= 4 && f[3] != "*" {
-				m[strings.ToLower(f[1])] = f[3]
 			}
 		}
 		break

@@ -302,7 +302,6 @@ async function doAction(action) {
   const r = await fetch('/api/action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action}) });
   const d = await r.json();
   toast(d.ok ? 'success' : 'error', d.message);
-}, 3800);
 }
 
 // Initial REST fetch

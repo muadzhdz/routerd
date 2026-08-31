@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -329,6 +330,21 @@ func cmdStart() {
 		sig <- syscall.SIGTERM
 	})
 
+	// Write clients.json periodically so the dashboard can read it without root.
+	go func() {
+		writeClients(cfg.InterfaceAP, runDir)
+		t := time.NewTicker(3 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-sig:
+				return
+			case <-t.C:
+				writeClients(cfg.InterfaceAP, runDir)
+			}
+		}
+	}()
+
 	<-sig
 	logInfo("shutting down")
 	cleanup(cfg)
@@ -515,6 +531,89 @@ func cmdLogs() {
 
 	go tailFile(hostapdLog, "hostapd")
 	tailFile(dnsmasqLog, "dnsmasq")
+}
+
+// writeClients writes the current connected client list to /run/routerd/clients.json
+// so the dashboard can read it without needing root/iw access.
+func writeClients(ap, runDir string) {
+	type clientEntry struct {
+		MAC      string `json:"mac"`
+		IP       string `json:"ip"`
+		Hostname string `json:"hostname"`
+		Signal   int    `json:"signal"`
+		TxRate   string `json:"tx_rate"`
+	}
+
+	out, err := runCmd("iw", "dev", ap, "station", "dump")
+	if err != nil {
+		return
+	}
+
+	// Read leases for IP resolution.
+	leases := make(map[string]string)
+	hostnames := make(map[string]string)
+	for _, path := range []string{
+		filepath.Join(runDir, "dnsmasq.leases"),
+		"/var/lib/misc/dnsmasq.leases",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			f := strings.Fields(line)
+			if len(f) >= 3 {
+				mac := strings.ToLower(f[1])
+				leases[mac] = f[2]
+				if len(f) >= 4 && f[3] != "*" {
+					hostnames[mac] = f[3]
+				}
+			}
+		}
+		break
+	}
+
+	var clients []clientEntry
+	var cur *clientEntry
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Station ") {
+			if cur != nil {
+				clients = append(clients, *cur)
+			}
+			parts := strings.Fields(line)
+			mac := ""
+			if len(parts) >= 2 {
+				mac = strings.ToLower(parts[1])
+			}
+			ip := leases[mac]
+			if ip == "" {
+				ip = "(no lease)"
+			}
+			cur = &clientEntry{MAC: mac, IP: ip, Hostname: hostnames[mac]}
+		} else if cur != nil {
+			if strings.HasPrefix(line, "tx bitrate:") {
+				cur.TxRate = strings.TrimSpace(strings.TrimPrefix(line, "tx bitrate:"))
+			}
+			if strings.HasPrefix(line, "signal:") {
+				var sig int
+				fmt.Sscan(strings.TrimSpace(strings.TrimPrefix(line, "signal:")), &sig)
+				cur.Signal = sig
+			}
+		}
+	}
+	if cur != nil {
+		clients = append(clients, *cur)
+	}
+	if clients == nil {
+		clients = []clientEntry{}
+	}
+
+	b, err := json.Marshal(clients)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(runDir, "clients.json"), b, 0644)
 }
 
 func cmdDashboard() {

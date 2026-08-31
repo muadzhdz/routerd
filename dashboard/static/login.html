@@ -16,7 +16,7 @@
     --text:     #ededed;
     --muted:    #666;
     --dim:      #333;
-    --accent:   #4ade80;
+    --accent:   #ffffff;
     --red:      #f87171;
     --font:     'Inter', system-ui, sans-serif;
     --mono:     'JetBrains Mono', monospace;
@@ -55,7 +55,7 @@
     transform: translateX(-50%);
     width: 600px;
     height: 400px;
-    background: radial-gradient(ellipse at center, rgba(74,222,128,0.04) 0%, transparent 70%);
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.03) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
   }
@@ -98,8 +98,8 @@
   }
   .brand-icon {
     width: 36px; height: 36px;
-    background: rgba(74,222,128,0.08);
-    border: 1px solid rgba(74,222,128,0.15);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
     border-radius: 10px;
     display: flex;
     align-items: center;
@@ -158,8 +158,8 @@
     transition: border-color 0.15s ease, background 0.15s ease;
   }
   input:focus {
-    border-color: rgba(74,222,128,0.3);
-    background: rgba(74,222,128,0.03);
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.02);
   }
   input::placeholder { color: var(--dim); }
 
@@ -216,7 +216,7 @@
     margin-top: 8px;
     letter-spacing: 0.1px;
   }
-  .btn-submit:hover { background: #22d45f; transform: translateY(-1px); }
+  .btn-submit:hover { background: #e0e0e0; transform: translateY(-1px); }
   .btn-submit:active { transform: translateY(0); }
   .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
@@ -264,7 +264,7 @@
     pointer-events: none;
   }
   #toast.show { transform: translateY(0); opacity: 1; pointer-events: all; }
-  #toast.ok  { border-left: 3px solid var(--accent); }
+  #toast.ok  { border-left: 3px solid rgba(255,255,255,0.6); }
   #toast.err { border-left: 3px solid var(--red); }
 </style>
 </head>

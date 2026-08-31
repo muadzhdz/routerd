@@ -196,7 +196,7 @@ input, textarea, select { font-family: inherit; }
 /* ─── Main content — centered ────────────────────────────── */
 .main {
   grid-area: main;
-  padding: 36px 24px;
+  padding: 16px 12px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -205,10 +205,10 @@ input, textarea, select { font-family: inherit; }
 
 .page-content {
   width: 100%;
-  max-width: var(--content-w);
+  max-width: 1400px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   animation: fadeUp 0.3s ease both;
 }
 
@@ -222,7 +222,7 @@ input, textarea, select { font-family: inherit; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: 22px 24px;
+  padding: 18px 20px;
   transition: border-color var(--transition);
   animation: fadeUp 0.3s ease both;
 }
@@ -520,8 +520,8 @@ select option { background: var(--surface-3); }
   word-break: break-all;
 }
 
-/* ─── Toast — portfolio glassmorphism style ──────────────── */
-#toast-container { display: none; } /* hide old container */
+/* ─── Toast — portfolio glassmorphism style (monochrome) ─── */
+#toast-container { display: none; }
 
 #toast {
   position: fixed;
@@ -530,8 +530,8 @@ select option { background: var(--surface-3); }
   z-index: 9999;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  background: rgba(10,10,10,0.85);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(10,10,10,0.88);
+  border: 1px solid rgba(255,255,255,0.08);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -554,9 +554,10 @@ select option { background: var(--surface-3); }
   opacity: 1;
   pointer-events: all;
 }
-#toast.ok  { border-left: 3px solid var(--green); }
-#toast.err { border-left: 3px solid var(--red); }
-#toast.info { border-left: 3px solid var(--blue); }
+/* Monochrome — all toasts get a white left border */
+#toast.ok  { border-left: 3px solid rgba(255,255,255,0.7); }
+#toast.err { border-left: 3px solid rgba(255,255,255,0.7); }
+#toast.info { border-left: 3px solid rgba(255,255,255,0.7); }
 
 /* ─── Alert ──────────────────────────────────────────────── */
 .alert {
