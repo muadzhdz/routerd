@@ -86,22 +86,13 @@ input, textarea, select { font-family: inherit; }
 .topbar-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--accent);
 }
-
-/* ASCII logo in topbar */
-.ascii-logo {
-  font-family: var(--font-mono);
-  font-size: 6.5px;
-  line-height: 1.15;
-  color: var(--text-dim);
-  letter-spacing: 0.3px;
-  white-space: pre;
-  user-select: none;
-  opacity: 0.7;
-  transition: opacity var(--transition);
-}
-.ascii-logo:hover { opacity: 1; }
+.topbar-brand svg { color: var(--text-muted); }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
@@ -198,9 +189,10 @@ input, textarea, select { font-family: inherit; }
 a.nav-item[href="/auth/logout"] {
   color: var(--text-dim);
   border-top: 1px solid var(--border);
-  margin-top: 8px;
-  padding-top: 14px;
-  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: 16px;
+  padding-top: 16px;
+  margin-bottom: 10px;
+  border-radius: var(--radius);
 }
 a.nav-item[href="/auth/logout"]:hover {
   background: var(--red-dim);
