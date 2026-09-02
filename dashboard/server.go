@@ -343,8 +343,9 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self' cdn.jsdelivr.net; "+
-				"style-src 'self' https://fonts.googleapis.com; "+
+			"default-src 'self'; "+
+				"script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"font-src 'self' https://fonts.gstatic.com; "+
 				"connect-src 'self' ws: wss:")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
