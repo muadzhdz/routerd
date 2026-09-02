@@ -80,21 +80,70 @@ func gatewayCIDR(cidr string) (string, error) {
 
 var chanRe = regexp.MustCompile(`(?m)freq:\s*(\d+)`)
 
+// iwBin returns the absolute path to the iw binary, searching common locations.
+// This is needed because systemd services and sudo may have a restricted PATH
+// that doesn't include /usr/sbin or /usr/bin depending on distro layout.
+func iwBin() string {
+	for _, p := range []string{"/usr/bin/iw", "/usr/sbin/iw", "/sbin/iw", "/bin/iw"} {
+		if fileExists(p) {
+			return p
+		}
+	}
+	return "iw" // last resort: rely on PATH
+}
+
+// detectChannel returns the channel and band of a wireless interface.
+// It tries three methods in order:
+//  1. iw dev <sta> info  — always shows current channel (kernel info, no assoc needed)
+//  2. iw dev <sta> link  — works when wpa_supplicant exposes freq in link output
+//  3. iw dev (global)    — parses the per-interface channel line from global dump
 func detectChannel(sta string) (int, string, error) {
-	out, err := runCmd("iw", "dev", sta, "link")
-	if err != nil {
-		return 0, "", fmt.Errorf("cannot read link state of %s: %s", sta, strings.TrimSpace(out))
+	iw := iwBin()
+	freqLineRe := regexp.MustCompile(`channel\s+\d+\s+\((\d+)\s+MHz\)`)
+
+	// --- Method 1: iw dev <sta> info — always populated by kernel -----------
+	// Works even when not associated. Output:
+	//   channel 36 (5180 MHz), width: 80 MHz, center1: 5210 MHz
+	if out, err := runCmd(iw, "dev", sta, "info"); err == nil {
+		if m := freqLineRe.FindStringSubmatch(out); len(m) >= 2 {
+			freq, _ := strconv.Atoi(m[1])
+			if ch, band := freqToChannel(freq); ch != 0 {
+				return ch, band, nil
+			}
+		}
 	}
-	m := chanRe.FindStringSubmatch(out)
-	if len(m) < 2 {
-		return 0, "", fmt.Errorf("cannot read channel of %s (not connected to any network?)", sta)
+
+	// --- Method 2: iw dev <sta> link — freq line when associated ------------
+	if out, err := runCmd(iw, "dev", sta, "link"); err == nil {
+		if m := chanRe.FindStringSubmatch(out); len(m) >= 2 {
+			freq, _ := strconv.Atoi(m[1])
+			if ch, band := freqToChannel(freq); ch != 0 {
+				return ch, band, nil
+			}
+		}
 	}
-	freq, _ := strconv.Atoi(m[1])
-	ch, band := freqToChannel(freq)
-	if ch == 0 {
-		return 0, "", fmt.Errorf("unsupported frequency %d MHz", freq)
+
+	// --- Method 3: iw dev global dump ---------------------------------------
+	if devOut, err := runCmd(iw, "dev"); err == nil && devOut != "" {
+		inIface := false
+		for _, line := range strings.Split(devOut, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "Interface ") {
+				inIface = strings.TrimPrefix(trimmed, "Interface ") == sta
+				continue
+			}
+			if inIface {
+				if m := freqLineRe.FindStringSubmatch(trimmed); len(m) >= 2 {
+					freq, _ := strconv.Atoi(m[1])
+					if ch, band := freqToChannel(freq); ch != 0 {
+						return ch, band, nil
+					}
+				}
+			}
+		}
 	}
-	return ch, band, nil
+
+	return 0, "", fmt.Errorf("cannot read channel of %s (not connected to any network?)", sta)
 }
 
 func freqToChannel(freq int) (int, string) {

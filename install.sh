@@ -53,14 +53,14 @@ install_deps() {
         echo "==> detected Arch Linux / Manjaro (pacman)"
         pacman -Sy --needed --noconfirm \
             hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv \
-            iptables iproute2 procps-ng
+            iptables iproute2 procps-ng go
 
     elif command -v apt-get >/dev/null 2>&1; then
         echo "==> detected Debian / Ubuntu / Mint (apt)"
         apt-get update -qq
         DEBIAN_FRONTEND=noninteractive apt-get install -y \
             hostapd dnsmasq iw wireless-regdb wireguard-tools \
-            openresolv resolvconf iptables iproute2 procps
+            openresolv resolvconf iptables iproute2 procps go
 
     elif command -v dnf >/dev/null 2>&1; then
         echo "==> detected Fedora / RHEL / Rocky / Alma (dnf)"
@@ -68,7 +68,7 @@ install_deps() {
         # pulls resolvconf on Fedora. Fallback: systemd-resolved handles DNS.
         dnf install -y \
             hostapd dnsmasq iw wireless-regdb wireguard-tools \
-            iptables iproute procps-ng
+            iptables iproute procps-ng go
         # Try openresolv from EPEL or best-effort
         dnf install -y openresolv 2>/dev/null || \
             echo "    note: openresolv not found in repos — wg-quick will use resolvconf fallback"
@@ -77,7 +77,7 @@ install_deps() {
         echo "==> detected RHEL / CentOS (yum)"
         yum install -y \
             hostapd dnsmasq iw wireless-regdb wireguard-tools \
-            iptables iproute procps-ng
+            iptables iproute procps-ng go
         yum install -y openresolv 2>/dev/null || \
             echo "    note: openresolv not found — install manually if wg-quick DNS fails"
 
@@ -85,7 +85,7 @@ install_deps() {
         echo "==> detected openSUSE (zypper)"
         zypper install -y \
             hostapd dnsmasq iw wireless-regdb wireguard-tools \
-            iptables iproute2 procps
+            iptables iproute2 procps go
         zypper install -y openresolv 2>/dev/null || \
             echo "    note: openresolv not found — install manually if wg-quick DNS fails"
 
@@ -93,7 +93,7 @@ install_deps() {
         echo "==> detected Alpine Linux (apk)"
         apk add --no-cache \
             hostapd dnsmasq iw wireless-tools wireguard-tools \
-            iptables iproute2 procps openresolv
+            iptables iproute2 procps openresolv go
 
     else
         echo "error: no supported package manager found (pacman, apt, dnf, yum, zypper, apk)" >&2
@@ -115,6 +115,32 @@ make build
 
 echo "==> installing files"
 make install
+
+# ---------------------------------------------------------------------------
+# Systemd network manager rules — keep ap0 unmanaged
+# ---------------------------------------------------------------------------
+echo "==> configuring network manager rules for ap0"
+
+# NetworkManager rule (if NM is present)
+if command -v nmcli >/dev/null 2>&1 || [ -d /etc/NetworkManager/conf.d ]; then
+    install -Dm644 90-routerd.conf /etc/NetworkManager/conf.d/90-routerd.conf
+    echo "    installed /etc/NetworkManager/conf.d/90-routerd.conf (NetworkManager)"
+fi
+
+# systemd-networkd rule — prevents networkd from managing ap0
+if systemctl is-active --quiet systemd-networkd 2>/dev/null || \
+   systemctl is-enabled --quiet systemd-networkd 2>/dev/null; then
+    mkdir -p /etc/systemd/network
+    cat > /etc/systemd/network/10-routerd-ap0.network <<'NETEOF'
+# routerd: keep ap0 unmanaged by systemd-networkd
+[Match]
+Name=ap0
+
+[Link]
+Unmanaged=yes
+NETEOF
+    echo "    installed /etc/systemd/network/10-routerd-ap0.network (systemd-networkd)"
+fi
 
 # ---------------------------------------------------------------------------
 # Create runtime directory with correct permissions

@@ -117,6 +117,36 @@ func cmdStart() {
 		log.Fatalf("cannot create %s: %v", runDir, err)
 	}
 
+	// Detect STA interface and channel BEFORE cleanup so that cleanup's
+	// deleteAPInterface (iw dev ap0 del) cannot disturb the phy state and
+	// cause iw dev <sta> info to return empty output on some drivers.
+	sta, err := findSTAInterface(cfg)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	var ch int
+	var band string
+	if cfg.Channel == "" || cfg.Channel == "auto" {
+		ch, band, err = detectChannel(sta)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		logInfo("auto-detected channel %d (%s band) from %s", ch, band, sta)
+	} else {
+		ch, err = strconv.Atoi(cfg.Channel)
+		if err != nil || ch < 1 || ch > 165 {
+			log.Fatalf("invalid CHANNEL %q (use auto or 1-165)", cfg.Channel)
+		}
+		if ch <= 14 {
+			band = "g"
+		} else {
+			band = "a"
+		}
+	}
+
+	cfg.InterfaceSTA = sta
+
 	cleanup(cfg)
 
 	failed := true
@@ -130,15 +160,11 @@ func cmdStart() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
-	sta, err := findSTAInterface(cfg)
-	if err != nil {
-		logWarn("%v", err)
-		return
-	}
 	uplink, err := detectUplink(cfg, sta)
 	if err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 	if cfg.Uplink == "" || cfg.Uplink == "auto" {
 		cfg.Uplink = uplink
@@ -147,32 +173,10 @@ func cmdStart() {
 	activeUplink, err := startVPN(cfg, runDir)
 	if err != nil {
 		logWarn("VPN setup error: %v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 
-	var ch int
-	var band string
-	if cfg.Channel == "" || cfg.Channel == "auto" {
-		ch, band, err = detectChannel(sta)
-		if err != nil {
-			logWarn("%v", err)
-			return
-		}
-		logInfo("auto-detected channel %d (%s band) from %s", ch, band, sta)
-	} else {
-		ch, err = strconv.Atoi(cfg.Channel)
-		if err != nil || ch < 1 || ch > 165 {
-			logWarn("invalid CHANNEL %q (use auto or 1-165)", cfg.Channel)
-			return
-		}
-		if ch <= 14 {
-			band = "g"
-		} else {
-			band = "a"
-		}
-	}
-
-	cfg.InterfaceSTA = sta
 	cfg.Uplink = activeUplink
 
 	if strings.EqualFold(cfg.Subnet, "random") {
@@ -183,30 +187,36 @@ func cmdStart() {
 	gwCIDR, err := gatewayCIDR(cfg.Subnet)
 	if err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 
 	if err := createAPInterface(sta, cfg.InterfaceAP, cfg.RandomMAC); err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 	if err := interfaceUp(cfg.InterfaceAP); err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 	setUnmanaged(cfg.InterfaceAP)
 
 	if err := startHostapd(cfg, ch, band, runDir); err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 	if err := addrAdd(cfg.InterfaceAP, gwCIDR); err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 	if err := startDnsmasq(cfg, runDir); err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 	if err := enableNAT(NATConfig{
 		RunDir:        runDir,
@@ -223,7 +233,8 @@ func cmdStart() {
 		DPIBypass:     cfg.DPIBypass,
 	}); err != nil {
 		logWarn("%v", err)
-		return
+		cleanup(cfg)
+		os.Exit(1)
 	}
 
 	writeState(State{
@@ -565,6 +576,18 @@ func cmdDashboard() {
 	vpnConf := cfg.VPNConfig
 	if vpnConf == "" {
 		vpnConf = "/etc/routerd/vpn.conf"
+	}
+
+	// If the routerd daemon is already running with DASHBOARD_ENABLED=true,
+	// the port is already bound. Inform the user instead of crashing.
+	if cfg.DashboardEnabled {
+		if st, ok := readState(); ok && hostapdRunning() {
+			fmt.Printf("routerd daemon is running and the dashboard is already active at http://%s:%d\n", bind, port)
+			fmt.Printf("  ssid=%s uplink=%s subnet=%s\n", st.SSID, st.Uplink, st.Subnet)
+			fmt.Println("  To open a separate dashboard instance, set DASHBOARD_ENABLED=false in /etc/routerd.conf")
+			fmt.Println("  and restart the service, then run 'routerd dashboard' again.")
+			return
+		}
 	}
 
 	srv := dashboard.NewServer(configPath, vpnConf, runDir, version, bind, password, port)

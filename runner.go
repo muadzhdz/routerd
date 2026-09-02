@@ -25,7 +25,8 @@ func (r *OSRunner) Run(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
-	return buf.String(), cmd.Run()
+	err := cmd.Run()
+	return buf.String(), err
 }
 
 // RunDir executes name with args in dir and returns combined stdout+stderr.
@@ -35,7 +36,8 @@ func (r *OSRunner) RunDir(dir, name string, args ...string) (string, error) {
 	cmd.Dir = dir
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
-	return buf.String(), cmd.Run()
+	err := cmd.Run()
+	return buf.String(), err
 }
 
 // defaultRunner is the global production runner used by runCmd and runCmdDir.

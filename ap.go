@@ -7,8 +7,12 @@ import (
 )
 
 // findSTAInterface resolves the wireless client interface that carries the
-// internet connection. If not forced by config, it picks the first wireless
-// interface that is currently associated with a network.
+// internet connection. If not forced by config, it tries three strategies:
+//  1. iw dev <iface> link  — looks for "Connected to" (classic wpa_supplicant)
+//  2. iw dev global dump   — looks for an interface with a non-zero channel
+//     (works on wpa_supplicant -u / DBus mode used by systemd-networkd setups)
+//  3. ip route show default — picks the wireless interface that holds the
+//     default route (catches any other managed-uplink scenario)
 func findSTAInterface(cfg *Config) (string, error) {
 	if cfg.InterfaceSTA != "" && cfg.InterfaceSTA != "auto" {
 		if !isWireless(cfg.InterfaceSTA) {
@@ -16,18 +20,27 @@ func findSTAInterface(cfg *Config) (string, error) {
 		}
 		return cfg.InterfaceSTA, nil
 	}
+
 	out, err := runCmd("ls", "/sys/class/net/")
 	if err != nil {
 		return "", err
 	}
+	var wirelessIfaces []string
 	for _, iface := range strings.Fields(out) {
 		if iface == "lo" || iface == cfg.InterfaceAP {
 			continue
 		}
-		if !isWireless(iface) {
-			continue
+		if isWireless(iface) {
+			wirelessIfaces = append(wirelessIfaces, iface)
 		}
-		link, err := runCmd("iw", "dev", iface, "link")
+	}
+	if len(wirelessIfaces) == 0 {
+		return "", fmt.Errorf("no wireless interfaces found (check: iw dev)")
+	}
+
+	// --- Strategy 1: iw dev <iface> link — "Connected to" ------------------
+	for _, iface := range wirelessIfaces {
+		link, err := runCmd(iwBin(), "dev", iface, "link")
 		if err != nil {
 			continue
 		}
@@ -35,6 +48,50 @@ func findSTAInterface(cfg *Config) (string, error) {
 			return iface, nil
 		}
 	}
+
+	// --- Strategy 2: iw dev global dump — interface has an active channel ---
+	// Useful for wpa_supplicant -u (DBus) mode used by systemd-networkd setups
+	// where iw dev <iface> link may not show "Connected to" even when connected.
+	if devOut, devErr := runCmd(iwBin(), "dev"); devErr == nil && devOut != "" {
+		chanLineRe := regexp.MustCompile(`channel\s+\d+\s+\(\d+\s+MHz\)`)
+		currentIface := ""
+		for _, line := range strings.Split(devOut, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "Interface ") {
+				currentIface = strings.TrimPrefix(trimmed, "Interface ")
+				continue
+			}
+			if currentIface == "" || currentIface == cfg.InterfaceAP {
+				continue
+			}
+			if chanLineRe.MatchString(trimmed) && isWireless(currentIface) {
+				return currentIface, nil
+			}
+		}
+	}
+
+	// --- Strategy 3: iw dev <iface> info — check each wireless iface -------
+	for _, iface := range wirelessIfaces {
+		out, err := runCmd(iwBin(), "dev", iface, "info")
+		if err != nil {
+			continue
+		}
+		// If the interface has a channel, it's active/associated.
+		if regexp.MustCompile(`channel\s+\d+`).MatchString(out) {
+			return iface, nil
+		}
+	}
+
+	// --- Strategy 3: ip route show default — wireless iface on default route -
+	if routeOut, routeErr := runCmd("ip", "route", "show", "default"); routeErr == nil {
+		re := regexp.MustCompile(`dev\s+(\S+)`)
+		for _, m := range re.FindAllStringSubmatch(routeOut, -1) {
+			if len(m) >= 2 && isWireless(m[1]) && m[1] != cfg.InterfaceAP {
+				return m[1], nil
+			}
+		}
+	}
+
 	return "", fmt.Errorf("no associated wireless client interface found (check: iw dev)")
 }
 
@@ -126,11 +183,24 @@ func addrDel(iface, cidr string) {
 	}
 }
 
-// setManaged tells NetworkManager to leave the interface alone.
+// setUnmanaged tells NetworkManager to leave the interface alone.
+// On systems using systemd-networkd instead of NetworkManager (e.g. Omarchy,
+// Arch with networkd), nmcli is not available — the warning is expected and
+// harmless. The interface is protected from networkd via a .network file drop-in
+// (see install.sh for the systemd-networkd unmanaged rule).
 func setUnmanaged(iface string) {
-	out, err := runCmd("nmcli", "device", "set", iface, "managed", "no")
+	// Only attempt if nmcli is available.
+	nmcli := "/usr/bin/nmcli"
+	if !fileExists(nmcli) {
+		nmcli = "nmcli"
+	}
+	out, err := runCmd(nmcli, "device", "set", iface, "managed", "no")
 	if err != nil {
-		logWarn("could not mark %q unmanaged in NetworkManager: %s", iface, strings.TrimSpace(out))
+		// Suppress the warning on non-NM systems — not a real error.
+		if !strings.Contains(out, "not found") && !strings.Contains(err.Error(), "not found") &&
+			!strings.Contains(err.Error(), "executable") {
+			logWarn("could not mark %q unmanaged in NetworkManager: %s", iface, strings.TrimSpace(out))
+		}
 	}
 }
 
