@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -101,3 +102,46 @@ func TestDeriveInterfaceFromConfFallback(t *testing.T) {
 		t.Errorf("expected 'vpn', got %q", got)
 	}
 }
+
+func TestPrepareRuntimeWGConfig(t *testing.T) {
+	dir := t.TempDir()
+	origPath := filepath.Join(dir, "vpn.conf")
+	runDir := filepath.Join(dir, "run")
+
+	content := `[Interface]
+PrivateKey = secretkey123
+Address = 10.2.0.2/32
+DNS = 1.1.1.1, 1.0.0.1
+
+[Peer]
+PublicKey = peerkey456
+Endpoint = 1.2.3.4:51820
+AllowedIPs = 0.0.0.0/0
+`
+	if err := os.WriteFile(origPath, []byte(content), 0600); err != nil {
+		t.Fatalf("failed to write original conf: %v", err)
+	}
+
+	runtimePath, err := prepareRuntimeWGConfig(origPath, runDir)
+	if err != nil {
+		t.Fatalf("prepareRuntimeWGConfig failed: %v", err)
+	}
+
+	if filepath.Base(runtimePath) != "vpn.conf" {
+		t.Errorf("expected runtime filename 'vpn.conf', got %q", filepath.Base(runtimePath))
+	}
+
+	data, err := os.ReadFile(runtimePath)
+	if err != nil {
+		t.Fatalf("failed to read runtime config: %v", err)
+	}
+
+	confStr := string(data)
+	if !strings.Contains(confStr, "# DNS = 1.1.1.1, 1.0.0.1 # commented by routerd") {
+		t.Errorf("expected DNS line to be commented out, got:\n%s", confStr)
+	}
+	if !strings.Contains(confStr, "PrivateKey = secretkey123") {
+		t.Errorf("expected PrivateKey to be preserved, got:\n%s", confStr)
+	}
+}
+

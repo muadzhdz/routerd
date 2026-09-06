@@ -65,18 +65,32 @@ func startWireGuard(cfg *Config, runDir, mode string) (string, error) {
 		return cfg.Uplink, nil
 	}
 
-	logInfo("starting WireGuard VPN tunnel using %s", confPath)
-	out, err := runCmd("wg-quick", "up", confPath)
-	if err != nil && !strings.Contains(out, "already exists") {
-		logWarn("cannot start WireGuard VPN (%s): %s; falling back to direct uplink %s", confPath, strings.TrimSpace(out), cfg.Uplink)
+	activeConf := confPath
+	if runtimeConf, err := prepareRuntimeWGConfig(confPath, runDir); err == nil {
+		activeConf = runtimeConf
+	} else {
+		logWarn("could not prepare runtime VPN config: %v; using original %s", err, confPath)
+	}
+
+	iface := deriveInterfaceFromConf(activeConf, cfg.VPNInterface)
+
+	// Tear down any stale interface from an unclean termination or previous run
+	_, _ = runCmd("wg-quick", "down", activeConf)
+	if iface != "" {
+		_, _ = runCmd("ip", "link", "del", "dev", iface)
+	}
+
+	logInfo("starting WireGuard VPN tunnel using %s", activeConf)
+	out, err := runCmd("wg-quick", "up", activeConf)
+	if err != nil {
+		logWarn("cannot start WireGuard VPN (%s): %s; falling back to direct uplink %s", activeConf, strings.TrimSpace(out), cfg.Uplink)
 		cfg.EnableVPN = false
 		return cfg.Uplink, nil
 	}
 
 	// Write tracking file so stopVPN knows to call wg-quick down.
-	_ = os.WriteFile(filepath.Join(runDir, "vpn_started"), []byte(confPath), 0600)
+	_ = os.WriteFile(filepath.Join(runDir, "vpn_started"), []byte(activeConf), 0600)
 
-	iface := deriveInterfaceFromConf(confPath, cfg.VPNInterface)
 	logInfo("WireGuard VPN active on interface %s", iface)
 	return iface, nil
 }
@@ -110,6 +124,9 @@ func stopVPN(cfg *Config, runDir string) {
 		}
 		_ = os.Remove(filepath.Join(runDir, "vpn_started"))
 	}
+	if iface := deriveInterfaceFromConf(cfg.VPNConfig, cfg.VPNInterface); iface != "" {
+		_, _ = runCmd("ip", "link", "del", "dev", iface)
+	}
 }
 
 // deriveInterfaceFromConf extracts the interface name from a WireGuard conf
@@ -126,6 +143,43 @@ func deriveInterfaceFromConf(confPath, defaultIface string) string {
 	}
 	return "wg0"
 }
+
+// prepareRuntimeWGConfig reads a WireGuard configuration and writes a copy to runDir
+// with any 'DNS = ...' directives commented out. wg-quick invokes resolvconf when DNS
+// is specified, which frequently fails on systems using systemd-resolved (e.g. Arch)
+// with 'signature mismatch'. Since routerd manages AP client DNS redirection independently
+// via iptables (VPNDNS) and dnsmasq, host resolvconf modification is unnecessary and harmful.
+func prepareRuntimeWGConfig(confPath, runDir string) (string, error) {
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	var modified []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "dns") {
+			rest := strings.TrimSpace(trimmed[3:])
+			if strings.HasPrefix(rest, "=") {
+				modified = append(modified, "# "+line+" # commented by routerd to prevent resolvconf conflicts")
+				continue
+			}
+		}
+		modified = append(modified, line)
+	}
+
+	if err := os.MkdirAll(runDir, 0700); err != nil {
+		return "", err
+	}
+	runtimePath := filepath.Join(runDir, filepath.Base(confPath))
+	if err := os.WriteFile(runtimePath, []byte(strings.Join(modified, "\n")), 0600); err != nil {
+		return "", err
+	}
+	return runtimePath, nil
+}
+
 
 // generateWARPConfigAuto attempts to use wgcf to register and generate a
 // real Cloudflare WARP WireGuard profile. Returns an error if wgcf is not

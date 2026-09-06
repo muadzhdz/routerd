@@ -611,7 +611,15 @@ func cmdDashboard() {
 
 func cmdWarpSetup() {
 	target := "/etc/routerd/vpn.conf"
-	logInfo("generating Cloudflare WARP profile template at %s", target)
+	logInfo("setting up Cloudflare WARP profile at %s", target)
+	if err := generateWARPConfigAuto(target); err == nil {
+		fmt.Printf("Successfully generated active Cloudflare WARP WireGuard profile at %s\n", target)
+		fmt.Println("Set ENABLE_VPN=true in /etc/routerd.conf to activate.")
+		return
+	} else {
+		logWarn("auto-generation via wgcf failed: %v", err)
+		logInfo("generating template instead...")
+	}
 	if err := generateWARPConfig(target); err != nil {
 		log.Fatalf("cannot generate WARP config: %v", err)
 	}

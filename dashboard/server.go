@@ -233,6 +233,8 @@ var publicPaths = map[string]bool{
 	"/login.html": true,
 	"/auth/login": true,
 	"/style.css":  true,
+	"/toast.js":   true,
+	"/qrcode.js":  true,
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {

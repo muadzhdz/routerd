@@ -53,7 +53,7 @@ install_deps() {
         echo "==> detected Arch Linux / Manjaro (pacman)"
         pacman -Sy --needed --noconfirm \
             hostapd dnsmasq iw wireless-regdb wireguard-tools openresolv \
-            iptables iproute2 procps-ng go
+            iptables iproute2 procps-ng go wgcf
 
     elif command -v apt-get >/dev/null 2>&1; then
         echo "==> detected Debian / Ubuntu / Mint (apt)"
@@ -98,6 +98,17 @@ install_deps() {
     else
         echo "error: no supported package manager found (pacman, apt, dnf, yum, zypper, apk)" >&2
         exit 1
+    fi
+
+    # Ensure wgcf is installed (for Cloudflare WARP auto-registration)
+    if ! command -v wgcf >/dev/null 2>&1; then
+        echo "==> installing wgcf (Cloudflare WARP tool)"
+        if command -v pacman >/dev/null 2>&1; then
+            pacman -S --needed --noconfirm wgcf 2>/dev/null || true
+        elif command -v go >/dev/null 2>&1; then
+            echo "    installing wgcf via go install..."
+            GOBIN=/usr/local/bin go install github.com/ViRb3/wgcf/v2@latest 2>/dev/null || true
+        fi
     fi
 
     echo "==> dependencies installed"
@@ -212,6 +223,14 @@ fi
 # ---------------------------------------------------------------------------
 if [[ "$WARP_SETUP" -eq 1 ]]; then
     echo "==> running routerd warp-setup (Cloudflare WARP)"
+    if ! command -v wgcf >/dev/null 2>&1; then
+        echo "==> installing wgcf for Cloudflare WARP..."
+        if command -v pacman >/dev/null 2>&1; then
+            pacman -S --needed --noconfirm wgcf 2>/dev/null || true
+        elif command -v go >/dev/null 2>&1; then
+            GOBIN=/usr/local/bin go install github.com/ViRb3/wgcf/v2@latest 2>/dev/null || true
+        fi
+    fi
     if command -v routerd >/dev/null 2>&1; then
         routerd warp-setup && \
             echo "    WARP profile generated at /etc/routerd/vpn.conf" && \

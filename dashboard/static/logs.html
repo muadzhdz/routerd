@@ -1,34 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>routerd — Logs</title>
-<link rel="stylesheet" href="/style.css">
-<style>
-.log-wrap { max-height: calc(100vh - 240px); }
-.log-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-.filter-btn { padding:4px 12px; border-radius:4px; border:1px solid var(--border-2); background:var(--surface-2); color:var(--text-muted); font-size:12px; font-weight:500; cursor:pointer; transition:background 0.15s,color 0.15s; }
-.filter-btn.active { background:var(--surface-3); color:var(--accent); border-color:var(--border-2); }
-.log-count { margin-left:auto; font-size:11px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>routerd — Real-time Logs</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/toast.js"></script>
 </head>
 <body>
 <div class="layout">
 
+  <!-- Topbar -->
   <header class="topbar">
     <div class="topbar-brand">
-      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
-      </svg>
-      <span style="font-size:15px;font-weight:700;letter-spacing:-0.4px;color:var(--accent)">routerd</span>
+      <div class="brand-badge">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">routerd</span>
+        <span class="brand-sub">Console Stream</span>
+      </div>
     </div>
-<div class="topbar-right">
+
+    <div class="topbar-right">
       <span class="status-pill stopped" id="status-pill">
-        <span class="dot"></span><span id="status-text">Loading</span>
+        <span class="dot"></span><span id="status-text">Connecting</span>
       </span>
-      <button class="btn btn-sm" onclick="doAction('reload')">
+      <button class="btn btn-sm" onclick="doAction('reload')" title="Reload daemon">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
@@ -37,105 +39,190 @@
     </div>
   </header>
 
+  <!-- Sidebar -->
   <nav class="sidebar">
     <span class="nav-section">Monitor</span>
     <a href="/" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </div>
       Overview
     </a>
     <a href="/bandwidth.html" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
       Bandwidth
     </a>
     <a href="/logs.html" class="nav-item active">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
       Logs
     </a>
+
     <span class="nav-section">Manage</span>
     <a href="/config.html" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
       Configuration
     </a>
     <a href="/vpn.html" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      VPN
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      VPN Gateway
     </a>
+
     <div class="sidebar-spacer"></div>
+
     <div class="sidebar-logout">
       <a href="/auth/logout" class="nav-item nav-logout">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
+        <div class="nav-icon-box">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </div>
         Sign Out
       </a>
     </div>
   </nav>
 
+  <!-- Main Content -->
   <main class="main">
     <div class="page-content">
-      <div class="card" style="animation-delay:0ms">
-      <div class="log-controls">
-      <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
-      <button class="filter-btn" id="filter-hostapd" onclick="setFilter('hostapd')">
-      <svg width="10" height="10" fill="none" stroke="var(--blue)" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:3px">
-      <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="var(--blue)"/>
-      </svg>
-      hostapd
-      </button>
-      <button class="filter-btn" id="filter-dnsmasq" onclick="setFilter('dnsmasq')">
-      <svg width="10" height="10" fill="none" stroke="var(--green)" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:3px">
-      <circle cx="12" cy="12" r="10"/>
-      </svg>
-      dnsmasq
-      </button>
-      <button class="btn btn-sm" onclick="clearLogs()">
-      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6"/><path d="M14 11v6"/>
-      </svg>
-      Clear
-      </button>
-      <button class="btn btn-sm" id="btn-pause" onclick="togglePause()">
-      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="pause-icon">
-      <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-      </svg>
-      Pause
-      </button>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;margin-left:4px">
-      <input type="checkbox" id="autoscroll" checked style="width:13px;height:13px;accent-color:var(--accent)">
-      Auto-scroll
-      </label>
-      <span class="log-count" id="log-count">0 lines</span>
+
+      <!-- Terminal Window Container -->
+      <div class="terminal-window">
+        <!-- Terminal Titlebar -->
+        <div class="terminal-header">
+          <div class="window-dots">
+            <div class="window-dot dot-red"></div>
+            <div class="window-dot dot-yellow"></div>
+            <div class="window-dot dot-green"></div>
+          </div>
+
+          <div class="terminal-title">
+            <div class="terminal-stream-dot"></div>
+            <span>routerd.service & child daemons — live stream</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="log-count" id="log-count">0 lines</span>
+          </div>
+        </div>
+
+        <!-- Controls Toolbar -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:rgba(255,255,255,0.015);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px">
+          <!-- Filters -->
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">
+              All Streams
+            </button>
+            <button class="filter-btn" id="filter-hostapd" onclick="setFilter('hostapd')">
+              <span style="color:var(--blue);font-weight:700">•</span> hostapd
+            </button>
+            <button class="filter-btn" id="filter-dnsmasq" onclick="setFilter('dnsmasq')">
+              <span style="color:var(--emerald);font-weight:700">•</span> dnsmasq
+            </button>
+          </div>
+
+          <!-- Search Input -->
+          <div style="flex:1;max-width:280px;position:relative">
+            <input type="text" id="log-search" placeholder="Search keywords..." oninput="onSearchChange()" style="padding:6px 12px 6px 30px;font-size:12px;background:rgba(0,0,0,0.4);border-radius:var(--radius-sm)">
+            <svg width="13" height="13" fill="none" stroke="var(--text-dim)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </div>
+
+          <!-- Action Buttons -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none;margin-right:4px">
+              <input type="checkbox" id="autoscroll" checked style="width:14px;height:14px;accent-color:var(--accent)">
+              Auto-scroll
+            </label>
+
+            <button class="btn btn-sm" id="btn-pause" onclick="togglePause()">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" id="pause-icon">
+                <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+              </svg>
+              <span id="pause-text">Pause</span>
+            </button>
+
+            <button class="btn btn-sm" onclick="exportLogs()" title="Export logs as file">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export
+            </button>
+
+            <button class="btn btn-sm btn-danger" onclick="clearLogs()" title="Clear terminal screen">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              </svg>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Terminal -->
+        <div class="log-wrap" id="log-output"></div>
       </div>
 
-      <div class="log-wrap" id="log-output"></div>
-      </div>
-    </div>
     </div>
   </main>
 </div>
+
+<!-- Mobile Navigation Bar -->
+<nav class="mobile-nav">
+  <ul class="mobile-nav-list">
+    <li><a href="/" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span>Overview</span>
+    </a></li>
+    <li><a href="/bandwidth.html" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Bandwidth</span>
+    </a></li>
+    <li><a href="/logs.html" class="mobile-nav-link active">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span>Logs</span>
+    </a></li>
+    <li><a href="/config.html" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83"/></svg>
+      <span>Config</span>
+    </a></li>
+    <li><a href="/vpn.html" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>VPN</span>
+    </a></li>
+  </ul>
+</nav>
+
 <div id="toast"></div>
 
 <script>
-const MAX_LINES = 2000;
-let allLines = [];    // {tag, text, cls}
+const MAX_LINES = 2500;
+let allLines = [];
 let currentFilter = 'all';
+let searchQuery = '';
 let paused = false;
 let ws, reconnectTimer;
 
@@ -144,7 +231,6 @@ function connect() {
   ws.onmessage = (e) => {
     try {
       const d = JSON.parse(e.data);
-      // WS pushes status; logs come via polling + REST
       if (d.type === 'status') return;
       if (d.lines) d.lines.forEach(appendLine);
     } catch {}
@@ -154,13 +240,12 @@ function connect() {
   };
 }
 
-// Poll for new log lines every 2 seconds
 let lastLineCount = 0;
 async function pollLogs() {
   if (paused) return;
   try {
     const src = currentFilter === 'all' ? '' : currentFilter;
-    const r = await fetch(`/api/logs?lines=${MAX_LINES}${src ? '&source='+src : ''}`);
+    const r = await fetch(`/api/logs?lines=${MAX_LINES}${src ? '&source=' + src : ''}`);
     const d = await r.json();
     if (d.lines && d.lines.length !== lastLineCount) {
       const newLines = d.lines.slice(lastLineCount);
@@ -171,35 +256,58 @@ async function pollLogs() {
 }
 
 function appendLine(raw) {
-  // Parse "[hostapd] message" or "[dnsmasq] message"
   const m = raw.match(/^\[(\w+)\]\s*(.*)/);
-  const tag = m ? m[1] : 'unknown';
+  const tag = m ? m[1] : 'routerd';
   const text = m ? m[2] : raw;
   const lower = text.toLowerCase();
   let cls = '';
   if (lower.includes('warn') || lower.includes('warning')) cls = 'log-warn';
-  else if (lower.includes('error') || lower.includes('fail') || lower.includes('denied')) cls = 'log-error';
+  else if (lower.includes('error') || lower.includes('fail') || lower.includes('denied') || lower.includes('fatal')) cls = 'log-error';
 
-  allLines.push({tag, text, cls});
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0];
+
+  const lineObj = { tag, text, cls, time: timeStr, raw };
+  allLines.push(lineObj);
   if (allLines.length > MAX_LINES) allLines.shift();
 
-  if (currentFilter !== 'all' && tag !== currentFilter) return;
-
-  renderLine({tag, text, cls});
+  if (matchesFilter(lineObj)) {
+    renderLine(lineObj);
+  }
 }
 
-function renderLine({tag, text, cls}) {
+function matchesFilter(lineObj) {
+  if (currentFilter !== 'all' && lineObj.tag !== currentFilter) return false;
+  if (searchQuery && !lineObj.text.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  return true;
+}
+
+function renderLine({ tag, text, cls, time }) {
   const out = document.getElementById('log-output');
   const div = document.createElement('div');
-  div.className = 'log-line' + (cls ? ' ' + cls : '');
+  div.className = 'log-line ' + cls;
   div.dataset.tag = tag;
-  div.innerHTML = `<span class="tag-${tag}">[${tag}]</span> <span class="log-text">${escHtml(text)}</span>`;
+
+  let tagClass = 'badge-gray';
+  if (tag === 'hostapd') tagClass = 'tag-hostapd';
+  else if (tag === 'dnsmasq') tagClass = 'tag-dnsmasq';
+
+  let highlightedText = escHtml(text);
+  if (searchQuery) {
+    const re = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    highlightedText = highlightedText.replace(re, '<span style="background:rgba(234,179,8,0.3);color:#fff;border-radius:2px;padding:0 2px">$1</span>');
+  }
+
+  div.innerHTML = `
+    <span class="log-time">${time || '—'}</span>
+    <span class="log-tag ${tagClass}">[${tag}]</span>
+    <span class="log-text">${highlightedText}</span>
+  `;
+
   out.appendChild(div);
 
-  // Keep max lines in DOM
   while (out.children.length > MAX_LINES) out.removeChild(out.firstChild);
 
-  // Auto-scroll
   if (document.getElementById('autoscroll').checked) {
     out.scrollTop = out.scrollHeight;
   }
@@ -207,22 +315,23 @@ function renderLine({tag, text, cls}) {
   updateCount();
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 function setFilter(f) {
   currentFilter = f;
   lastLineCount = 0;
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('filter-' + f).classList.add('active');
+  rebuildOutput();
+}
 
-  // Re-render from allLines
+function onSearchChange() {
+  searchQuery = document.getElementById('log-search').value.trim();
+  rebuildOutput();
+}
+
+function rebuildOutput() {
   const out = document.getElementById('log-output');
   out.innerHTML = '';
-  allLines
-    .filter(l => f === 'all' || l.tag === f)
-    .forEach(l => renderLine(l));
+  allLines.filter(matchesFilter).forEach(renderLine);
 }
 
 function clearLogs() {
@@ -230,18 +339,38 @@ function clearLogs() {
   lastLineCount = 0;
   document.getElementById('log-output').innerHTML = '';
   updateCount();
+  toast('info', 'Terminal log display cleared');
 }
 
 function togglePause() {
   paused = !paused;
   const btn = document.getElementById('btn-pause');
+  const text = document.getElementById('pause-text');
   if (paused) {
-    btn.innerHTML = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume`;
+    text.textContent = 'Resume';
     btn.classList.add('btn-success');
+    toast('info', 'Log stream paused');
   } else {
-    btn.innerHTML = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+    text.textContent = 'Pause';
     btn.classList.remove('btn-success');
+    toast('info', 'Log stream resumed');
   }
+}
+
+function exportLogs() {
+  if (!allLines.length) {
+    toast('info', 'No log entries to export');
+    return;
+  }
+  const text = allLines.map(l => l.raw || `[${l.tag}] ${l.text}`).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `routerd-logs-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('success', 'Logs exported successfully');
 }
 
 function updateCount() {
@@ -249,25 +378,46 @@ function updateCount() {
   document.getElementById('log-count').textContent = `${shown} lines`;
 }
 
-async function doAction(action) {
-  const r = await fetch('/api/action', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
-  const d = await r.json();
-  toast(d.ok ? 'success' : 'error', d.message);
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Initial load + polling
-fetch('/api/logs?lines=200').then(r=>r.json()).then(d=>{
-  if (d.lines) { d.lines.forEach(appendLine); lastLineCount = d.lines.length; }
-});
+async function doAction(action) {
+  try {
+    const r = await fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    const d = await r.json();
+    toast(d.ok ? 'success' : 'error', d.message);
+  } catch (err) {
+    toast('error', `Request error: ${err.message}`);
+  }
+}
+
+// Initial load
+fetch('/api/logs?lines=200')
+  .then(r => r.json())
+  .then(d => {
+    if (d.lines) {
+      d.lines.forEach(appendLine);
+      lastLineCount = d.lines.length;
+    }
+  })
+  .catch(() => {});
+
 setInterval(pollLogs, 2000);
 connect();
 
-fetch('/api/status').then(r=>r.json()).then(d=>{
-  const pill = document.getElementById('status-pill');
-  pill.className = 'status-pill ' + (d.running ? 'running' : 'stopped');
-  document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
-});
+fetch('/api/status')
+  .then(r => r.json())
+  .then(d => {
+    const pill = document.getElementById('status-pill');
+    pill.className = 'status-pill ' + (d.running ? 'running' : 'stopped');
+    document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
+  })
+  .catch(() => {});
 </script>
-<script src="/toast.js"></script>
 </body>
 </html>

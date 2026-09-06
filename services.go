@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -64,7 +65,7 @@ func (pm *ProcessManager) stopAll() {
 			_ = p.cmd.Wait()
 			close(done)
 		}(p)
-		_ = p.cmd.Process.Signal(os.Interrupt)
+		_ = p.cmd.Process.Signal(syscall.SIGTERM)
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):

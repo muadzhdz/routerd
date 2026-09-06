@@ -1,322 +1,479 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>routerd — Configuration</title>
-<link rel="stylesheet" href="/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>routerd — Configuration</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/toast.js"></script>
 </head>
 <body>
 <div class="layout">
 
+  <!-- Topbar -->
   <header class="topbar">
     <div class="topbar-brand">
-      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
-      </svg>
-      <span style="font-size:15px;font-weight:700;letter-spacing:-0.4px;color:var(--accent)">routerd</span>
+      <div class="brand-badge">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">routerd</span>
+        <span class="brand-sub">Settings & Rules</span>
+      </div>
     </div>
-<div class="topbar-right">
+
+    <div class="topbar-right">
       <span class="status-pill stopped" id="status-pill">
-        <span class="dot"></span><span id="status-text">Loading</span>
+        <span class="dot"></span><span id="status-text">Connecting</span>
       </span>
-      <button class="btn btn-sm" onclick="doAction('reload')">
+      <button class="btn btn-sm btn-primary" onclick="saveAndReload()">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
-        Reload
-      </button>
-      <button class="btn btn-sm btn-danger" onclick="doAction('stop')">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-        </svg>
-        Stop
+        Save & Reload
       </button>
     </div>
   </header>
 
+  <!-- Sidebar -->
   <nav class="sidebar">
     <span class="nav-section">Monitor</span>
     <a href="/" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </div>
       Overview
     </a>
     <a href="/bandwidth.html" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
       Bandwidth
     </a>
     <a href="/logs.html" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
       Logs
     </a>
+
     <span class="nav-section">Manage</span>
     <a href="/config.html" class="nav-item active">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
       Configuration
     </a>
     <a href="/vpn.html" class="nav-item">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      VPN
+      <div class="nav-icon-box">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      VPN Gateway
     </a>
+
     <div class="sidebar-spacer"></div>
+
     <div class="sidebar-logout">
       <a href="/auth/logout" class="nav-item nav-logout">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
+        <div class="nav-icon-box">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </div>
         Sign Out
       </a>
     </div>
   </nav>
 
+  <!-- Main Content -->
   <main class="main">
     <div class="page-content">
-      <div id="alert-area"></div>
 
-      <!-- Visual editor -->
-      <div class="card" style="animation-delay:0ms">
-      <div class="card-header">
-      <span class="card-title">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-      <path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
-      </svg>
-      Access Point
-      </span>
-      </div>
-      <div class="form-grid">
-      <div class="form-group">
-      <label>SSID</label>
-      <input type="text" id="f-ssid" placeholder="routerd">
-      </div>
-      <div class="form-group">
-      <label>Password (WPA2, 8-63 chars, empty = open)</label>
-      <input type="password" id="f-password" placeholder="Leave empty for open network">
-      </div>
-      <div class="form-group">
-      <label>Channel</label>
-      <select id="f-channel">
-      <option value="auto">auto (follow active connection)</option>
-      <option value="1">1 (2.4 GHz)</option><option value="6">6 (2.4 GHz)</option>
-      <option value="11">11 (2.4 GHz)</option><option value="36">36 (5 GHz)</option>
-      <option value="40">40 (5 GHz)</option><option value="44">44 (5 GHz)</option>
-      <option value="48">48 (5 GHz)</option><option value="149">149 (5 GHz)</option>
-      <option value="153">153 (5 GHz)</option><option value="157">157 (5 GHz)</option>
-      <option value="161">161 (5 GHz)</option>
-      </select>
-      </div>
-      <div class="form-group">
-      <label>Country Code (ISO 3166-1)</label>
-      <input type="text" id="f-country" placeholder="ID" maxlength="2">
-      </div>
-      <div class="form-group">
-      <label>Max Clients</label>
-      <input type="number" id="f-max-clients" min="1" max="128" placeholder="16">
-      </div>
-      <div class="form-group">
-      <label>Subnet (CIDR or "random")</label>
-      <input type="text" id="f-subnet" placeholder="random">
-      </div>
-      <div class="form-group">
-      <label>DNS Server</label>
-      <input type="text" id="f-dns" placeholder="127.0.0.53">
-      </div>
-      <div class="form-group">
-      <label>Rate Limit (Mbps, 0 = unlimited)</label>
-      <input type="number" id="f-limit-rate" min="0" placeholder="0">
-      </div>
+      <!-- Category Segmented Tabs -->
+      <div class="tabs-nav">
+        <button class="tab-btn active" onclick="switchSection('section-ap', this)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1.5" fill="currentColor"/></svg>
+          Wi-Fi & AP
+        </button>
+        <button class="tab-btn" onclick="switchSection('section-network', this)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          Routing & Interfaces
+        </button>
+        <button class="tab-btn" onclick="switchSection('section-stealth', this)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Privacy & Stealth
+        </button>
+        <button class="tab-btn" onclick="switchSection('section-vpn-cfg', this)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          VPN Gateway
+        </button>
+        <button class="tab-btn" onclick="switchSection('section-dash', this)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          Web Dashboard
+        </button>
+        <button class="tab-btn" onclick="switchSection('section-raw', this)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Raw Config Editor
+        </button>
       </div>
 
-      <hr class="divider">
-      <div class="card-title" style="margin-bottom:12px">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      Security &amp; Stealth
-      </div>
-      <div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Random MAC Address</div><div class="toggle-desc">Generate a new random MAC for the AP interface on every start</div></div>
-      <label class="toggle"><input type="checkbox" id="f-random-mac"><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Isolate Host</div><div class="toggle-desc">Block AP clients from scanning or accessing host services</div></div>
-      <label class="toggle"><input type="checkbox" id="f-isolate-host"><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Disable IPv6</div><div class="toggle-desc">Block IPv6 on AP interface to prevent leaks</div></div>
-      <label class="toggle"><input type="checkbox" id="f-disable-ipv6"><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Hide SSID</div><div class="toggle-desc">Do not broadcast SSID (hidden network mode)</div></div>
-      <label class="toggle"><input type="checkbox" id="f-hide-ssid"><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Tor Mode</div><div class="toggle-desc">Transparently proxy all TCP and DNS traffic through Tor</div></div>
-      <label class="toggle"><input type="checkbox" id="f-tor-mode"><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">WPA3 (SAE/WPA2 transition)</div><div class="toggle-desc">Enable WPA3-SAE with WPA2-PSK fallback — requires hostapd 2.9+</div></div>
-      <label class="toggle"><input type="checkbox" id="f-wpa3"><span class="toggle-track"></span></label>
-      </div>
-      </div>
-      <div class="form-grid" style="margin-top:16px">
-      <div class="form-group">
-      <label>TTL Spoof (0 = disabled)</label>
-      <input type="number" id="f-spoof-ttl" min="0" max="255" placeholder="64">
-      </div>
-      </div>
+      <!-- Tab 1: Wi-Fi & AP -->
+      <section class="card config-section" id="section-ap">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon" style="color:var(--accent)">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><circle cx="12" cy="20" r="1.5" fill="currentColor"/></svg>
+            </div>
+            Wireless Access Point Parameters
+          </div>
+        </div>
 
-      <hr class="divider">
-      <div class="card-title" style="margin-bottom:12px">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-      <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
-      <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
-      </svg>
-      Interfaces
-      </div>
-      <div class="form-grid">
-      <div class="form-group">
-      <label>STA Interface (uplink WiFi)</label>
-      <input type="text" id="f-iface-sta" placeholder="auto">
-      </div>
-      <div class="form-group">
-      <label>AP Interface</label>
-      <input type="text" id="f-iface-ap" placeholder="ap0">
-      </div>
-      <div class="form-group">
-      <label>NAT Uplink</label>
-      <input type="text" id="f-uplink" placeholder="auto">
-      </div>
-      </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>SSID (Network Name)</label>
+            <input type="text" id="f-ssid" placeholder="routerd" oninput="markDirty()">
+          </div>
 
-      <hr class="divider">
-      <div class="card-title" style="margin-bottom:12px">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      VPN Gateway
-      </div>
-      <div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Enable VPN</div><div class="toggle-desc">Route all AP client traffic through the VPN tunnel</div></div>
-      <label class="toggle"><input type="checkbox" id="f-enable-vpn"><span class="toggle-track"></span></label>
-      </div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">VPN Kill Switch</div><div class="toggle-desc">Block client internet access if VPN drops</div></div>
-      <label class="toggle"><input type="checkbox" id="f-vpn-kill-switch"><span class="toggle-track"></span></label>
-      </div>
-      </div>
-      <div class="form-grid" style="margin-top:16px">
-      <div class="form-group">
-      <label>VPN Mode</label>
-      <select id="f-vpn-mode">
-      <option value="wireguard">wireguard</option>
-      <option value="warp">warp (Cloudflare)</option>
-      <option value="custom">custom (existing interface)</option>
-      <option value="dpibypass">dpibypass</option>
-      </select>
-      </div>
-      <div class="form-group">
-      <label>VPN Config Path</label>
-      <input type="text" id="f-vpn-config" placeholder="/etc/routerd/vpn.conf">
-      </div>
-      <div class="form-group">
-      <label>VPN Interface</label>
-      <input type="text" id="f-vpn-iface" placeholder="wg0">
-      </div>
-      <div class="form-group">
-      <label>VPN DNS</label>
-      <input type="text" id="f-vpn-dns" placeholder="1.1.1.1">
-      </div>
-      </div>
+          <div class="form-group">
+            <label>
+              <span>Wi-Fi Password (WPA2/WPA3)</span>
+              <span style="font-size:10px;color:var(--text-dim);cursor:pointer" onclick="togglePassVisibility('f-password')">Show / Hide</span>
+            </label>
+            <input type="password" id="f-password" placeholder="Leave empty for open network (min 8 chars)" oninput="markDirty()">
+          </div>
 
-      <hr class="divider">
-      <div class="card-title" style="margin-bottom:12px">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
-      <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
-      </svg>
-      Dashboard
-      </div>
-      <div>
-      <div class="toggle-row">
-      <div><div class="toggle-label">Enable Dashboard</div><div class="toggle-desc">Start the web dashboard on next routerd start</div></div>
-      <label class="toggle"><input type="checkbox" id="f-dashboard-enabled"><span class="toggle-track"></span></label>
-      </div>
-      </div>
-      <div class="form-grid" style="margin-top:16px">
-      <div class="form-group">
-      <label>Dashboard Port</label>
-      <input type="number" id="f-dashboard-port" min="1" max="65535" placeholder="8080">
-      </div>
-      <div class="form-group">
-      <label>Bind Address</label>
-      <input type="text" id="f-dashboard-bind" placeholder="0.0.0.0">
-      </div>
-      <div class="form-group">
-      <label>Dashboard Password (empty = no auth)</label>
-      <input type="password" id="f-dashboard-password" placeholder="Leave empty for no authentication">
-      </div>
-      </div>
+          <div class="form-group">
+            <label>Channel & Frequency Band</label>
+            <select id="f-channel" onchange="markDirty()">
+              <option value="auto">auto (follow current Wi-Fi connection)</option>
+              <optgroup label="2.4 GHz Band (802.11b/g/n)">
+                <option value="1">Channel 1 (2412 MHz)</option>
+                <option value="6">Channel 6 (2437 MHz)</option>
+                <option value="11">Channel 11 (2462 MHz)</option>
+              </optgroup>
+              <optgroup label="5 GHz Band (802.11a/n/ac)">
+                <option value="36">Channel 36 (5180 MHz)</option>
+                <option value="40">Channel 40 (5200 MHz)</option>
+                <option value="44">Channel 44 (5220 MHz)</option>
+                <option value="48">Channel 48 (5240 MHz)</option>
+                <option value="149">Channel 149 (5745 MHz)</option>
+                <option value="153">Channel 153 (5765 MHz)</option>
+                <option value="157">Channel 157 (5785 MHz)</option>
+                <option value="161">Channel 161 (5805 MHz)</option>
+              </optgroup>
+            </select>
+          </div>
 
-      <hr class="divider">
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="saveAndReload()">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-      </svg>
-      Save &amp; Reload
-      </button>
-      <button class="btn" onclick="saveOnly()">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-      </svg>
-      Save Only
-      </button>
-      <button class="btn" onclick="resetForm()" style="margin-left:auto">Reset to Loaded</button>
-      </div>
-      </div>
+          <div class="form-group">
+            <label>Country Code (ISO 3166-1)</label>
+            <input type="text" id="f-country" placeholder="ID" maxlength="2" style="text-transform:uppercase" oninput="markDirty()">
+          </div>
 
-      <!-- Raw editor -->
-      <div class="card" style="animation-delay:60ms" style="margin-top:16px">
-      <div class="card-header">
-      <span class="card-title">Raw Config Editor</span>
-      <button class="btn btn-sm" onclick="saveRaw()">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-      </svg>
-      Save Raw
-      </button>
-      </div>
-      <div class="form-group">
-      <textarea id="raw-config" style="min-height:280px;font-size:12px" spellcheck="false"></textarea>
-      </div>
-      </div>
-    </div>
+          <div class="form-group">
+            <label>Maximum Connected Clients</label>
+            <input type="number" id="f-max-clients" min="1" max="128" placeholder="16" oninput="markDirty()">
+          </div>
+
+          <div class="form-group">
+            <label>Bandwidth Limit (Mbps, 0 = unlimited)</label>
+            <input type="number" id="f-limit-rate" min="0" placeholder="0" oninput="markDirty()">
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Routing & Interfaces -->
+      <section class="card config-section" id="section-network" style="display:none">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon" style="color:var(--emerald)">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+            </div>
+            Subnet & Interface Routing
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Client Subnet (CIDR or "random")</label>
+            <input type="text" id="f-subnet" placeholder="random or 192.168.50.0/24" oninput="markDirty()">
+          </div>
+
+          <div class="form-group">
+            <label>Advertised DNS Server</label>
+            <input type="text" id="f-dns" placeholder="127.0.0.53" oninput="markDirty()">
+          </div>
+
+          <div class="form-group">
+            <label>Client Wi-Fi Interface (STA Uplink)</label>
+            <input type="text" id="f-iface-sta" placeholder="auto" oninput="markDirty()">
+          </div>
+
+          <div class="form-group">
+            <label>AP Virtual Interface</label>
+            <input type="text" id="f-iface-ap" placeholder="ap0" oninput="markDirty()">
+          </div>
+
+          <div class="form-group full">
+            <label>NAT WAN Uplink Interface</label>
+            <input type="text" id="f-uplink" placeholder="auto" oninput="markDirty()">
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Privacy & Stealth -->
+      <section class="card config-section" id="section-stealth" style="display:none">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon" style="color:var(--violet)">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            Stealth & Anonymity Settings
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Random MAC Address (RANDOM_MAC)</div>
+              <div class="toggle-desc">Generate a cryptographically randomized MAC for the AP interface on every start.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-random-mac" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Host Isolation (ISOLATE_HOST)</div>
+              <div class="toggle-desc">Block connected AP clients from scanning, probing, or accessing local host services.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-isolate-host" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Prevent IPv6 Leaks (DISABLE_IPV6)</div>
+              <div class="toggle-desc">Disable IPv6 on AP interface & block IPv6 forwarding to prevent ISP location leaks.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-disable-ipv6" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Hide SSID Broadcast (HIDE_SSID)</div>
+              <div class="toggle-desc">Conceal the network name from regular Wi-Fi scans (hidden network mode).</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-hide-ssid" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">WPA3-SAE Transition Mode (WPA3)</div>
+              <div class="toggle-desc">Enable WPA3-SAE authentication with backward-compatible WPA2-PSK transition support.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-wpa3" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Tor Transparent Proxy (TOR_MODE)</div>
+              <div class="toggle-desc">Route all AP client TCP & DNS traffic transparently through local Tor daemon.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-tor-mode" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="form-group" style="margin-top:8px">
+            <label>Outgoing Packet TTL Spoofing (SPOOF_TTL, default 64, 0 = disabled)</label>
+            <input type="number" id="f-spoof-ttl" min="0" max="255" placeholder="64" oninput="markDirty()">
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 4: VPN Gateway Settings -->
+      <section class="card config-section" id="section-vpn-cfg" style="display:none">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon" style="color:var(--blue)">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            VPN Tunnel & Kill-Switch Settings
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Enable Transparent VPN Gateway (ENABLE_VPN)</div>
+              <div class="toggle-desc">Automatically route all client traffic through an encrypted VPN tunnel.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-enable-vpn" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">VPN Kill-Switch (VPN_KILL_SWITCH)</div>
+              <div class="toggle-desc">Completely block client internet access if the VPN connection drops or fails.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-vpn-kill-switch" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>VPN Mode</label>
+              <select id="f-vpn-mode" onchange="markDirty()">
+                <option value="wireguard">wireguard (standard WireGuard profile)</option>
+                <option value="warp">warp (Cloudflare WARP)</option>
+                <option value="custom">custom (existing wg0, tun0 interface)</option>
+                <option value="dpibypass">dpibypass (MSS clamping anti-censorship)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>WireGuard Profile Path (VPN_CONFIG)</label>
+              <input type="text" id="f-vpn-config" placeholder="/etc/routerd/vpn.conf" oninput="markDirty()">
+            </div>
+
+            <div class="form-group">
+              <label>VPN Interface Name (VPN_INTERFACE)</label>
+              <input type="text" id="f-vpn-iface" placeholder="wg0" oninput="markDirty()">
+            </div>
+
+            <div class="form-group">
+              <label>Forced Tunnel DNS (VPN_DNS)</label>
+              <input type="text" id="f-vpn-dns" placeholder="1.1.1.1" oninput="markDirty()">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: Web Dashboard Settings -->
+      <section class="card config-section" id="section-dash" style="display:none">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon" style="color:var(--amber)">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            </div>
+            Web Dashboard Daemon Configuration
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="toggle-card">
+            <div>
+              <div class="toggle-label">Auto-Start Web Dashboard (DASHBOARD_ENABLED)</div>
+              <div class="toggle-desc">Automatically launch this web UI when routerd service starts.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="f-dashboard-enabled" onchange="markDirty()"><span class="toggle-track"></span></label>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Dashboard HTTP Port</label>
+              <input type="number" id="f-dashboard-port" min="1" max="65535" placeholder="8080" oninput="markDirty()">
+            </div>
+
+            <div class="form-group">
+              <label>Bind Address</label>
+              <input type="text" id="f-dashboard-bind" placeholder="0.0.0.0" oninput="markDirty()">
+            </div>
+
+            <div class="form-group full">
+              <label>
+                <span>Dashboard Auth Password</span>
+                <span style="font-size:10px;color:var(--text-dim);cursor:pointer" onclick="togglePassVisibility('f-dashboard-password')">Show / Hide</span>
+              </label>
+              <input type="password" id="f-dashboard-password" placeholder="Leave empty for unauthenticated access" oninput="markDirty()">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 6: Raw Config Editor -->
+      <section class="card config-section" id="section-raw" style="display:none">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-title-icon" style="color:var(--accent)">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            Raw /etc/routerd.conf Editor
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="saveRaw()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
+            Save Raw Config
+          </button>
+        </div>
+
+        <div class="form-group">
+          <textarea id="raw-config" style="min-height:360px;font-size:12px;background:rgba(5,7,12,0.9)" spellcheck="false"></textarea>
+        </div>
+      </section>
+
     </div>
   </main>
 </div>
+
+<!-- Sticky Save Bar for Dirty Changes -->
+<div class="sticky-save-bar" id="sticky-bar">
+  <span style="font-size:13px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px">
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber)"></span>
+    You have unsaved changes
+  </span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="btn btn-sm" onclick="resetForm()">Discard</button>
+    <button class="btn btn-sm" onclick="saveOnly()">Save Changes</button>
+    <button class="btn btn-sm btn-primary" onclick="saveAndReload()">Save & Reload</button>
+  </div>
+</div>
+
+<!-- Mobile Navigation Bar -->
+<nav class="mobile-nav">
+  <ul class="mobile-nav-list">
+    <li><a href="/" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span>Overview</span>
+    </a></li>
+    <li><a href="/bandwidth.html" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Bandwidth</span>
+    </a></li>
+    <li><a href="/logs.html" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span>Logs</span>
+    </a></li>
+    <li><a href="/config.html" class="mobile-nav-link active">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83"/></svg>
+      <span>Config</span>
+    </a></li>
+    <li><a href="/vpn.html" class="mobile-nav-link">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>VPN</span>
+    </a></li>
+  </ul>
+</nav>
+
 <div id="toast"></div>
 
 <script>
 let loadedRaw = '';
+let isDirty = false;
+
 const fieldMap = {
   'SSID': 'f-ssid', 'PASSWORD': 'f-password', 'CHANNEL': 'f-channel',
   'COUNTRY': 'f-country', 'MAX_CLIENTS': 'f-max-clients', 'SUBNET': 'f-subnet',
@@ -333,28 +490,54 @@ const fieldMap = {
 };
 const boolFields = new Set(['RANDOM_MAC','ISOLATE_HOST','DISABLE_IPV6','HIDE_SSID','TOR_MODE','WPA3','ENABLE_VPN','VPN_KILL_SWITCH','DASHBOARD_ENABLED']);
 
+function switchSection(sectionId, btn) {
+  document.querySelectorAll('.config-section').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(sectionId).style.display = 'block';
+  btn.classList.add('active');
+}
+
+function markDirty() {
+  isDirty = true;
+  document.getElementById('sticky-bar').classList.add('show');
+}
+
+function clearDirty() {
+  isDirty = false;
+  document.getElementById('sticky-bar').classList.remove('show');
+}
+
+function togglePassVisibility(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
 async function loadConfig() {
-  const r = await fetch('/api/config');
-  const d = await r.json();
-  loadedRaw = d.raw || '';
-  document.getElementById('raw-config').value = loadedRaw;
-  const p = d.parsed || {};
-  for (const [key, id] of Object.entries(fieldMap)) {
-    const el = document.getElementById(id);
-    if (!el) continue;
-    const val = p[key] ?? '';
-    if (boolFields.has(key)) {
-      el.checked = val.toLowerCase() === 'true' || val === '1';
-    } else if (el.tagName === 'SELECT') {
-      el.value = val.toLowerCase();
-    } else {
-      el.value = val;
+  try {
+    const r = await fetch('/api/config');
+    const d = await r.json();
+    loadedRaw = d.raw || '';
+    document.getElementById('raw-config').value = loadedRaw;
+    const p = d.parsed || {};
+    for (const [key, id] of Object.entries(fieldMap)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const val = p[key] ?? '';
+      if (boolFields.has(key)) {
+        el.checked = val.toLowerCase() === 'true' || val === '1';
+      } else if (el.tagName === 'SELECT') {
+        el.value = val.toLowerCase();
+      } else {
+        el.value = val;
+      }
     }
+    clearDirty();
+  } catch (err) {
+    toast('error', `Failed to load config: ${err.message}`);
   }
 }
 
 function buildContent() {
-  // Rebuild the config from form fields, preserving comments from raw
   const lines = loadedRaw.split('\n');
   const updated = {};
   for (const [key, id] of Object.entries(fieldMap)) {
@@ -362,7 +545,6 @@ function buildContent() {
     if (!el) continue;
     updated[key] = boolFields.has(key) ? (el.checked ? 'true' : 'false') : el.value;
   }
-  // Update existing key lines
   const seen = new Set();
   const out = lines.map(line => {
     const trimmed = line.trimStart();
@@ -374,7 +556,6 @@ function buildContent() {
     }
     return line;
   });
-  // Append any keys not already in file
   for (const [key, val] of Object.entries(updated)) {
     if (!seen.has(key)) out.push(`${key}=${val}`);
   }
@@ -383,59 +564,79 @@ function buildContent() {
 
 async function saveOnly() {
   const content = buildContent();
-  const r = await fetch('/api/config', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({content})
-  });
-  const d = await r.json();
-  toast(d.ok ? 'success' : 'error', d.message);
-  if (d.ok) { loadedRaw = content; document.getElementById('raw-config').value = content; }
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('success', d.message || 'Config saved successfully');
+      loadedRaw = content;
+      document.getElementById('raw-config').value = loadedRaw;
+      clearDirty();
+    } else {
+      toast('error', d.error || 'Failed to save configuration');
+    }
+  } catch (err) {
+    toast('error', `Network error: ${err.message}`);
+  }
 }
 
 async function saveAndReload() {
-  const content = buildContent();
-  const r = await fetch('/api/config', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({content})
-  });
-  const d = await r.json();
-  if (!d.ok) { toast('error', d.message); return; }
-  loadedRaw = content;
-  document.getElementById('raw-config').value = content;
-  const r2 = await fetch('/api/action', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({action:'reload'})
-  });
-  const d2 = await r2.json();
-  toast(d2.ok ? 'success' : 'error', d2.ok ? 'Config saved and reload triggered.' : d2.message);
+  await saveOnly();
+  toast('info', 'Applying reload...');
+  try {
+    const r = await fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reload' }),
+    });
+    const d = await r.json();
+    toast(d.ok ? 'success' : 'error', d.message || 'Reload signal sent');
+  } catch (err) {
+    toast('error', `Reload error: ${err.message}`);
+  }
 }
 
 async function saveRaw() {
   const content = document.getElementById('raw-config').value;
-  const r = await fetch('/api/config', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({content})
-  });
-  const d = await r.json();
-  toast(d.ok ? 'success' : 'error', d.message);
-  if (d.ok) loadedRaw = content;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('success', d.message || 'Raw config saved');
+      loadedRaw = content;
+      loadConfig();
+    } else {
+      toast('error', d.error || 'Failed to save raw config');
+    }
+  } catch (err) {
+    toast('error', `Save error: ${err.message}`);
+  }
 }
 
-function resetForm() { document.getElementById('raw-config').value = loadedRaw; loadConfig(); }
-
-async function doAction(action) {
-  const r = await fetch('/api/action', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
-  const d = await r.json();
-  toast(d.ok ? 'success' : 'error', d.message);
+function resetForm() {
+  loadConfig();
+  toast('info', 'Form reset to saved values');
 }
 
-fetch('/api/status').then(r=>r.json()).then(d=>{
-  const pill = document.getElementById('status-pill');
-  pill.className = 'status-pill ' + (d.running ? 'running' : 'stopped');
-  document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
-});
+// Bootstrap
 loadConfig();
+
+fetch('/api/status')
+  .then(r => r.json())
+  .then(d => {
+    const pill = document.getElementById('status-pill');
+    pill.className = 'status-pill ' + (d.running ? 'running' : 'stopped');
+    document.getElementById('status-text').textContent = d.running ? 'Running' : 'Stopped';
+  })
+  .catch(() => {});
 </script>
-<script src="/toast.js"></script>
 </body>
 </html>

@@ -27,10 +27,12 @@ type StatusResponse struct {
 	VPNActive   bool   `json:"vpn_active"`
 	VPNMode     string `json:"vpn_mode"`
 	VPNEndpoint string `json:"vpn_endpoint,omitempty"`
-	VPNLatency  string `json:"vpn_latency,omitempty"`
-	Uptime      string `json:"uptime"`
-	UptimeSecs  int64  `json:"uptime_secs"`
-	Version     string `json:"version"`
+	VPNLatency   string `json:"vpn_latency,omitempty"`
+	VPNHandshake string `json:"vpn_handshake,omitempty"`
+	VPNHealthy   bool   `json:"vpn_healthy"`
+	Uptime       string `json:"uptime"`
+	UptimeSecs   int64  `json:"uptime_secs"`
+	Version      string `json:"version"`
 }
 
 // ClientInfo represents one connected AP station.
@@ -128,6 +130,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if st.VPNActive {
 		resp.VPNEndpoint = vpnEndpoint(st.Uplink)
 		resp.VPNLatency = vpnLatency(st.Uplink)
+		_, lastHS := vpnWGInfo(st.Uplink)
+		resp.VPNHandshake = lastHS
+		resp.VPNHealthy = (lastHS != "")
 	}
 
 	writeJSON(w, resp)
