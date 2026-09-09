@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net"
 	"os"
@@ -15,45 +16,52 @@ import (
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpf bpf bpf/xdp_prog.c
 
 func main()  {
-	// 1. Load eBPF objects (program-program + maps) ke kernel
+	ifaceFlag := flag.String("iface", "wlp2s0", "Interface jaringan target (default: wlp2s0)")
+	flag.Parse()
+
+	// 1. Load eBPF objects ke kernel
 	objs := bpfObjects{}
 	if err := loadBpfObjects(&objs, nil); err != nil {
-		log.Fatalf("Gagal me-load eBPF objects ke kernel: %v", err)
+		log.Fatalf("Gagal me-load eBPF objects: %v", err)
 	}
 	defer objs.Close()
 
-	// 2. Tentukan interface target
-	ifaceName := "lo"
-	iface, err := net.InterfaceByName(ifaceName)
+	// 2. Cari interface target
+	iface, err := net.InterfaceByName(*ifaceFlag)
 	if err != nil {
-		log.Fatalf("Interface %s tidak ditemukan: %v", ifaceName, err)
+		log.Fatalf("Interface %s tidak ditemukan: %v", *ifaceFlag, err)
 	}
 
-	// 3. Pasang INGRESS HOOK (XDP - Pintu Masuk)
-	lXdp, err := link.AttachXDP(link.XDPOptions{
-		Program:		objs.XdpRouterFunc,
-		Interface: 	iface.Index,
-	})
-	if err != nil {
-		log.Fatalf("Gagal Attach XDP ke %s: %v", ifaceName, err)
+	// 3. Pasang INGRESS HOOK (Hanya pasang XDP jika di 'lo' agar kartu Wi-Fi tidak kaget/link flap)
+	if *ifaceFlag == "lo" {
+		lXdp, err := link.AttachXDP(link.XDPOptions{
+			Program:		objs.XdpRouterFunc,
+			Interface: 	iface.Index,
+		})
+		if err != nil {
+			log.Printf("Peringatan: Gagal attach XDP ke %s: %v", *ifaceFlag, err)
+		} else {
+			defer lXdp.Close()
+			log.Printf("Ingress XDP aktif di [%s]", *ifaceFlag)
+		}
+	} else {
+		log.Printf("Mode Wi-Fi fisik: Melewati XDP agar kartu jaringan tetap 100% stabil")
 	}
-	defer lXdp.Close() 
-
-	// 4. Pasang EGRESS HOOK (TCX - Pintu Masuk / DPI Monitor)
+	// 4. Pasang EGRESS HOOK (TCX Egress - DPI Hunter)
 	lTc, err := link.AttachTCX(link.TCXOptions{
 		Program: objs.TcEgressFunc,
 		Attach: ebpf.AttachTCXEgress,
 		Interface: iface.Index,
 	})
 	if err != nil {
-		log.Fatalf("Gagal Attach TCX Egress ke %s: %v", ifaceName, err)
+		log.Fatalf("Gagal Attach TCX Egress ke %s: %v", *ifaceFlag, err)
 	}
 	defer lTc.Close()
 
-	log.Printf("SUCCESS: Ingress (XDP) & Egress (TCX) AKTIF di interface [%s]!", ifaceName)
-	log.Println("Monitoring dua arah berjalan... Tekan [Ctrl + C] untuk keluar.")
+	log.Printf("SUCCESS: Engine TCX eBPF AKTIF di interface [%s]!", *ifaceFlag)
+	log.Println("Memburu paket TLS ClientHello... Tekan [Ctrl + C] untuk keluar.")
 
-	// 5. Goroutine Monitoring Dua Arah
+	// 5. Goroutine Monitoring
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -63,16 +71,12 @@ func main()  {
 		for {
 			select {
 			case <-ticker.C:
-				var dropCount, httpsCount uint64
+				var helloCount uint64
 				key := uint32(0)
 
-				// Baca data Ingress (Port 8080 Blocked)
-				_ = objs.TcpDropCount.Lookup(key, &dropCount)
+				_ = objs.ClientHelloCount.Lookup(key, &helloCount)
 
-				// baca data Egress (HTTPS Port 443 Keluar)
-				_ = objs.ScrambleCount.Lookup(key, &httpsCount)
-
-				log.Printf("[HUD Jaringan] INGRESS DROP (8080): %d | EGRESS SCRAMBLE (443): %d", dropCount, httpsCount)
+				log.Printf("[HUD Jaringan] TLS CLIENTHELLO TERTANGKAP: %d", helloCount)
 
 			case <-stopChan:
 				return
@@ -80,11 +84,11 @@ func main()  {
 		}
 	}()
 
-	// 6. Tunggu sinyal Ctrl+C
+	// 6. Tunggu Ctrl+C
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
 	close(stopChan)
-	log.Println("\nMembersihkan XDP & TCX dari kernel. Keluar dengan aman!")
+	log.Println("\nMembersihkan Engine dari kernel. Keluar dengan aman!")
 }

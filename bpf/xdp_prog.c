@@ -14,21 +14,13 @@ struct {
   __uint(max_entries, 1);
 } tcp_drop_count SEC(".maps");
 
-// BPF MAP 2: Egress SCRAMBLED (Port 443 Window Modified)
+// BPF MAP 2: Egress TLS ClientHello Hunter!
 struct {
   __uint(type, BPF_MAP_TYPE_ARRAY);
   __type(key, __u32);
   __type(value, __u64);
   __uint(max_entries, 1);
-} scramble_count SEC(".maps");
-
-// Helper matematika RFC 1624: Update Checksum instan
-static inline void update_csum16(__u16 *csum, __u16 old_val, __u16 new_val) {
-  __u32 sum = (~(*csum) & 0xffff) + (~old_val & 0xffff) + new_val;
-  sum = (sum >> 16) + (sum & 0xffff);
-  sum += (sum >> 16);
-  *csum = ~sum;
-}
+} client_hello_count SEC(".maps");
 
 //======================================
 // 1. INGRESS HOOK (XDP - Pintu Masuk)
@@ -94,22 +86,42 @@ int tc_egress_func(struct __sk_buff *skb) {
   if ((void *)tcp + sizeof(struct tcphdr) > data_end)
     return TC_ACT_OK;
 
-  // JIKA MENUJU PORT 443 (HTTPS):MODIKASI PAKETNYA!
+  // Periksa apakah menuju Port 443 (HTTPS)
   if (bpf_ntohs(tcp->dest) == 443) {
-    __u16 old_win = tcp->window;
-    __u16 new_win = bpf_htons(1460); // Paksa ukuran window jadi 1460 byte
+    // 1. Tarik 128 byte pertama ke linear buffer supaya payload TLS masuk ke skb->data
+    if (bpf_skb_pull_data(skb, 128) < 0)
+      return TC_ACT_OK;
 
-    //Perbaiki checksum terlebih dahulu
-    update_csum16(&tcp->check, old_win, new_win);
+    // 2. WAJIB RE-EVALUASI pointer karena memori bisa berpindah setelah pull!
+    data = (void *)(long)skb->data;
+    data_end = (void *)(long)skb->data_end;
+    
+    // Re-validate boundary IP & TCP setelah refresh pointer 
+    eth = data;
+    if ((void *)eth + sizeof(struct ethhdr) > data_end)
+      return TC_ACT_OK;
 
-    // Timpa nilai window lama dengan nilai baru di memori kernel!
-    tcp->window = new_win;
+    ip = (void *)eth + sizeof(struct ethhdr);
+    if ((void *)ip + sizeof(struct iphdr) > data_end)
+      return TC_ACT_OK;
 
-    // Catat ke BPF Map bahwa sukses mengacak 1 paket
-    __u32 key = 0;
-    __u64 *val = bpf_map_lookup_elem(&scramble_count, &key);
-    if (val) {
-      __sync_fetch_and_add(val, 1);
+    tcp = (void *)ip + (ip->ihl * 4);
+    if ((void *)tcp + sizeof(struct tcphdr) > data_end)
+      return TC_ACT_OK;
+
+    // 3. Sekarang hitung payload TCP
+    void *payload = (void *)tcp + (tcp->doff * 4);
+
+    if ((void *)payload + 6 <= data_end) {
+      __u8 *bytes = payload;
+
+      if (bytes[0] == 0x16 && bytes[5] == 0x01) {
+        __u32 key = 0;
+        __u64 *val = bpf_map_lookup_elem(&client_hello_count, &key);
+        if (val) {
+          __sync_fetch_and_add(val, 1);
+        }
+      }
     }
   }
     return TC_ACT_OK;
