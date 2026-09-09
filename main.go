@@ -70,9 +70,9 @@ func main()  {
 				_ = objs.TcpDropCount.Lookup(key, &dropCount)
 
 				// baca data Egress (HTTPS Port 443 Keluar)
-				_ = objs.EgressHttpsCount.Lookup(key, &httpsCount)
+				_ = objs.ScrambleCount.Lookup(key, &httpsCount)
 
-				log.Printf("[HUD Jaringan] INGRESS DROP (Port 8080): %d | EGRESS HTTPS (Port 443): %d", dropCount, httpsCount)
+				log.Printf("[HUD Jaringan] INGRESS DROP (8080): %d | EGRESS SCRAMBLE (443): %d", dropCount, httpsCount)
 
 			case <-stopChan:
 				return

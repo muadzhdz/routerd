@@ -15,10 +15,10 @@ import (
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
-	bpfMapEgressHttpsCount = "egress_https_count"
-	bpfMapTcpDropCount     = "tcp_drop_count"
-	bpfProgTcEgressFunc    = "tc_egress_func"
-	bpfProgXdpRouterFunc   = "xdp_router_func"
+	bpfMapScrambleCount  = "scramble_count"
+	bpfMapTcpDropCount   = "tcp_drop_count"
+	bpfProgTcEgressFunc  = "tc_egress_func"
+	bpfProgXdpRouterFunc = "xdp_router_func"
 )
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -71,8 +71,8 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	EgressHttpsCount *ebpf.MapSpec `ebpf:"egress_https_count"`
-	TcpDropCount     *ebpf.MapSpec `ebpf:"tcp_drop_count"`
+	ScrambleCount *ebpf.MapSpec `ebpf:"scramble_count"`
+	TcpDropCount  *ebpf.MapSpec `ebpf:"tcp_drop_count"`
 }
 
 // bpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -101,13 +101,13 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	EgressHttpsCount *ebpf.Map `ebpf:"egress_https_count"`
-	TcpDropCount     *ebpf.Map `ebpf:"tcp_drop_count"`
+	ScrambleCount *ebpf.Map `ebpf:"scramble_count"`
+	TcpDropCount  *ebpf.Map `ebpf:"tcp_drop_count"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.EgressHttpsCount,
+		m.ScrambleCount,
 		m.TcpDropCount,
 	)
 }
