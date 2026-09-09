@@ -53,6 +53,7 @@ func main()  {
 		Attach: ebpf.AttachTCXEgress,
 		Interface: iface.Index,
 	})
+
 	if err != nil {
 		log.Fatalf("Gagal Attach TCX Egress ke %s: %v", *ifaceFlag, err)
 	}
@@ -61,6 +62,20 @@ func main()  {
 	log.Printf("SUCCESS: Engine TCX eBPF AKTIF di interface [%s]!", *ifaceFlag)
 	log.Println("Memburu paket TLS ClientHello... Tekan [Ctrl + C] untuk keluar.")
 
+	// 4b. Pasang INGRESS HOOK (TCX Ingress - The TCP Window Clamper)
+  lTcIngress, err := link.AttachTCX(link.TCXOptions{
+    Program:   objs.TcIngressFunc,
+    Attach:    ebpf.AttachTCXIngress,
+    Interface: iface.Index,
+  })
+
+  if err != nil {
+  	log.Fatalf("Gagal Attach TCX Ingress ke %s: %v", *ifaceFlag, err)
+  }
+
+  defer lTcIngress.Close()
+  log.Printf("SUCCESS: Engine TCX Ingress & Egress AKTIF di interface [%s]!", *ifaceFlag)	
+	
 	// 5. Goroutine Monitoring
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -72,11 +87,13 @@ func main()  {
 			select {
 			case <-ticker.C:
 				var helloCount uint64
+				var clampCount uint64
 				key := uint32(0)
 
 				_ = objs.ClientHelloCount.Lookup(key, &helloCount)
+				_ = objs.SynackClampCount.Lookup(key, &clampCount)
 
-				log.Printf("[HUD Jaringan] TLS CLIENTHELLO TERTANGKAP: %d", helloCount)
+				log.Printf("[HUD Jaringan] INGRESS SYN/ACK CLAMP: %d | EGRESS TLS CLIENTHELLO: %d", clampCount, helloCount)
 
 			case <-stopChan:
 				return

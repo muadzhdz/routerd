@@ -22,6 +22,22 @@ struct {
   __uint(max_entries, 1);
 } client_hello_count SEC(".maps");
 
+// BPF MAP #: Ingress Clamped SYN/ACK Counter
+struct {
+  __uint(type, BPF_MAP_TYPE_ARRAY);
+  __type(key, __u32);
+  __type(value, __u64);
+  __uint(max_entries, 1);
+} synack_clamp_count SEC(".maps");
+
+// Helper matematika RFC 1624: Update Checksum 16-bit secara instan
+static inline void update_csum16(__u16 *csum, __u16 old_val, __u16 new_val) {
+  __u32 sum = (~(*csum) & 0xffff) + (~old_val & 0xffff) + new_val;
+  sum = (sum >> 16) + (sum & 0xffff);
+  sum += (sum >> 16);
+  *csum = ~sum;
+}
+
 //======================================
 // 1. INGRESS HOOK (XDP - Pintu Masuk)
 //======================================
@@ -125,6 +141,55 @@ int tc_egress_func(struct __sk_buff *skb) {
     }
   }
     return TC_ACT_OK;
+}
+
+//========================================================
+// 3. INGRESS HOOK (TC Ingress - The TCP Window Clamper)
+//========================================================
+
+SEC("tc")
+int tc_ingress_func(struct __sk_buff *skb) {
+  void *data = (void *)(long)skb->data;
+  void *data_end = (void *)(long)skb->data_end;
+
+  struct ethhdr *eth = data;
+  if ((void *)eth + sizeof(struct ethhdr) > data_end)
+    return TC_ACT_OK;
+
+  if (eth->h_proto != bpf_htons(ETH_P_IP))
+    return TC_ACT_OK;
+
+  struct iphdr *ip = (void *)eth + sizeof(struct ethhdr);
+  if ((void *)ip + sizeof(struct iphdr) > data_end)
+    return TC_ACT_OK;
+
+  if (ip->protocol != IPPROTO_TCP || ip->ihl < 5)
+    return TC_ACT_OK;
+
+  struct tcphdr *tcp = (void *)ip + (ip->ihl * 4);
+  if ((void *)tcp + sizeof(struct tcphdr) > data_end)
+    return TC_ACT_OK;
+
+  // Tangkap balasan dari Port 443 yang memiliki flag SYN dan ACK
+  if (bpf_ntohs(tcp->source) == 443 && tcp->syn && tcp->ack) {
+    __u16 old_win = tcp->window;
+    __u16 new_win = bpf_htons(2); // Paksa window jadi cuma 2 byte!
+
+    // Perbaiki checksum L4 TCP
+    update_csum16(&tcp->check, old_win, new_win);
+
+    // Timpa window di memori kernel
+    tcp->window = new_win;
+
+    // Catat ke BPF Map
+    __u32 key = 0;
+    __u64 *val = bpf_map_lookup_elem(&synack_clamp_count, &key);
+    if (val) {
+      __sync_fetch_and_add(val, 1);
+    }
+  }
+
+  return TC_ACT_OK;
 }
 
 char __license[] SEC("license") = "Dual MIT/GPL";

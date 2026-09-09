@@ -16,8 +16,10 @@ import (
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
 	bpfMapClientHelloCount = "client_hello_count"
+	bpfMapSynackClampCount = "synack_clamp_count"
 	bpfMapTcpDropCount     = "tcp_drop_count"
 	bpfProgTcEgressFunc    = "tc_egress_func"
+	bpfProgTcIngressFunc   = "tc_ingress_func"
 	bpfProgXdpRouterFunc   = "xdp_router_func"
 )
 
@@ -64,6 +66,7 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	TcEgressFunc  *ebpf.ProgramSpec `ebpf:"tc_egress_func"`
+	TcIngressFunc *ebpf.ProgramSpec `ebpf:"tc_ingress_func"`
 	XdpRouterFunc *ebpf.ProgramSpec `ebpf:"xdp_router_func"`
 }
 
@@ -72,6 +75,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	ClientHelloCount *ebpf.MapSpec `ebpf:"client_hello_count"`
+	SynackClampCount *ebpf.MapSpec `ebpf:"synack_clamp_count"`
 	TcpDropCount     *ebpf.MapSpec `ebpf:"tcp_drop_count"`
 }
 
@@ -102,12 +106,14 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	ClientHelloCount *ebpf.Map `ebpf:"client_hello_count"`
+	SynackClampCount *ebpf.Map `ebpf:"synack_clamp_count"`
 	TcpDropCount     *ebpf.Map `ebpf:"tcp_drop_count"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.ClientHelloCount,
+		m.SynackClampCount,
 		m.TcpDropCount,
 	)
 }
@@ -123,12 +129,14 @@ type bpfVariables struct {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	TcEgressFunc  *ebpf.Program `ebpf:"tc_egress_func"`
+	TcIngressFunc *ebpf.Program `ebpf:"tc_ingress_func"`
 	XdpRouterFunc *ebpf.Program `ebpf:"xdp_router_func"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.TcEgressFunc,
+		p.TcIngressFunc,
 		p.XdpRouterFunc,
 	)
 }
