@@ -1,0 +1,17 @@
+# Commpiled bindaries
+routerd
+routerd-engine
+*.o
+!bpf_*.o
+
+# Environment & credentials
+*.conf
+*.toml
+*.env 
+
+# Editor & OS artifacts
+.DS_Store
+*.swap
+*~
+
+
