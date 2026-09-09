@@ -7,11 +7,12 @@ routerd-engine
 # Environment & credentials
 *.conf
 *.toml
-*.env 
+*.env
 
 # Editor & OS artifacts
 .DS_Store
 *.swap
 *~
 
-
+# Kernel headers
+bpf/vmlinux.h 
