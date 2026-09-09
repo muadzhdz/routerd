@@ -8,17 +8,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpf bpf bpf/xdp_prog.c
 
 func main()  {
-	// 1. Load eBPF objects (program + map) ke kernel
+	// 1. Load eBPF objects (program-program + maps) ke kernel
 	objs := bpfObjects{}
 	if err := loadBpfObjects(&objs, nil); err != nil {
-		log.Fatalf("Gagal me-load program eBPF ke kernel: %v", err)
+		log.Fatalf("Gagal me-load eBPF objects ke kernel: %v", err)
 	}
 	defer objs.Close()
 
@@ -29,21 +29,31 @@ func main()  {
 		log.Fatalf("Interface %s tidak ditemukan: %v", ifaceName, err)
 	}
 
-	// 2. Attach program XDP ke interface
-	l, err := link.AttachXDP(link.XDPOptions{
+	// 3. Pasang INGRESS HOOK (XDP - Pintu Masuk)
+	lXdp, err := link.AttachXDP(link.XDPOptions{
 		Program:		objs.XdpRouterFunc,
 		Interface: 	iface.Index,
 	})
 	if err != nil {
-		log.Fatalf("Gagal menempelkan XDP ke interface %s: %v", ifaceName, err)
+		log.Fatalf("Gagal Attach XDP ke %s: %v", ifaceName, err)
 	}
-	defer l.Close() 
+	defer lXdp.Close() 
 
-	log.Printf("SUCCESS: Program eBPF aktif di interface [%s]!", ifaceName)
-	log.Println("Monitoring traffic... Kirim paket (misal ping localhost) untuk melihat counter!")
-	log.Println("Tekan [Ctrl + C] untuk menghentikan program...")
+	// 4. Pasang EGRESS HOOK (TCX - Pintu Masuk / DPI Monitor)
+	lTc, err := link.AttachTCX(link.TCXOptions{
+		Program: objs.TcEgressFunc,
+		Attach: ebpf.AttachTCXEgress,
+		Interface: iface.Index,
+	})
+	if err != nil {
+		log.Fatalf("Gagal Attach TCX Egress ke %s: %v", ifaceName, err)
+	}
+	defer lTc.Close()
 
-	// 4. Goroutine untuk membaca BPF Map setia 1 detik
+	log.Printf("SUCCESS: Ingress (XDP) & Egress (TCX) AKTIF di interface [%s]!", ifaceName)
+	log.Println("Monitoring dua arah berjalan... Tekan [Ctrl + C] untuk keluar.")
+
+	// 5. Goroutine Monitoring Dua Arah
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -53,15 +63,16 @@ func main()  {
 		for {
 			select {
 			case <-ticker.C:
-				var count uint64
+				var dropCount, httpsCount uint64
 				key := uint32(0)
 
-				// 4. Membaca data dari BPF Array Map di Ring 0
-				if err := objs.TcpDropCount.Lookup(key, &count); err != nil {
-					log.Printf("Error membaca map: %v", err)
-					continue
-				}
-				log.Printf("[TCP Firewall] Percobaan Akses Port 8080 di-DROP: %d", count)
+				// Baca data Ingress (Port 8080 Blocked)
+				_ = objs.TcpDropCount.Lookup(key, &dropCount)
+
+				// baca data Egress (HTTPS Port 443 Keluar)
+				_ = objs.EgressHttpsCount.Lookup(key, &httpsCount)
+
+				log.Printf("[HUD Jaringan] INGRESS DROP (Port 8080): %d | EGRESS HTTPS (Port 443): %d", dropCount, httpsCount)
 
 			case <-stopChan:
 				return
@@ -69,13 +80,11 @@ func main()  {
 		}
 	}()
 
-	// 5. Tunggu snyal Ctrl+C
+	// 6. Tunggu sinyal Ctrl+C
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
 	close(stopChan)
-	log.Println("\nMemebersihkan XDP dari kernel dan keluar dengan aman...")
+	log.Println("\nMembersihkan XDP & TCX dari kernel. Keluar dengan aman!")
 }
-
-
