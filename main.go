@@ -57,11 +57,11 @@ func main()  {
 				key := uint32(0)
 
 				// 4. Membaca data dari BPF Array Map di Ring 0
-				if err := objs.PktCount.Lookup(key, &count); err != nil {
+				if err := objs.DropCount.Lookup(key, &count); err != nil {
 					log.Printf("Error membaca map: %v", err)
 					continue
 				}
-				log.Printf("[Traffic Real-Time] Total Paket Masuk: %d", count)
+				log.Printf("[Firewall eBPF Aktif] Total Paket ping (ICMP) yang di-DROP: %d", count)
 
 			case <-stopChan:
 				return
