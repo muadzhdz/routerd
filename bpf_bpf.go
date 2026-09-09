@@ -15,6 +15,7 @@ import (
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
+	bpfMapPktCount       = "pkt_count"
 	bpfProgXdpRouterFunc = "xdp_router_func"
 )
 
@@ -67,6 +68,7 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	PktCount *ebpf.MapSpec `ebpf:"pkt_count"`
 }
 
 // bpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -95,10 +97,13 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	PktCount *ebpf.Map `ebpf:"pkt_count"`
 }
 
 func (m *bpfMaps) Close() error {
-	return _BpfClose()
+	return _BpfClose(
+		m.PktCount,
+	)
 }
 
 // bpfVariables contains all global variables after they have been loaded into the kernel.
