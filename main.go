@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/muadzhdz/routerd/pkg/dns"
+	"github.com/muadzhdz/routerd/pkg/hotspot"
 	"github.com/muadzhdz/routerd/pkg/netutil"
 )
 
@@ -20,6 +21,9 @@ import (
 
 func main()  {
 	ifaceFlag := flag.String("iface", "", "Interface jaringan target (kosongkan untuk auto-detect)")
+	hotspotFlag := flag.Bool("hotspot", false, "Aktifkan Wi-Fi Hotspot & Stealth NAT Router")
+	ssidFlag := flag.String("ssid", "routerd", "Nama SSID Wi-Fi Hotspot")
+	passFlag := flag.String("password", "routerd123", "Password Wi-Fi Hotspot (min 8 karakter)")
 	flag.Parse()
 
 	// 1. Load eBPF objects ke kernel
@@ -101,6 +105,14 @@ func main()  {
   _ = exec.Command("resolvectl", "dns", iface.Name, "127.0.0.1").Run()
   _ = exec.Command("resolvectl", "flush-caches").Run()
   log.Printf("SUCCESS: System DNS [%s] dialihkan ke 127.0.0.1 (DoH Cloudflare)!", iface.Name)
+
+	// 4d. Jika flag -hotspot aktif: Nyalakan Wi-Fi Hotspot & Stealth NAT!
+	if *hotspotFlag {
+		if err := hotspot.StartHotspot(iface.Name, *ssidFlag, *passFlag); err != nil {
+			log.Printf("Peringatan Hotspot: %v", err)
+		}
+	}
+
 	// 5. Goroutine Monitoring
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -130,6 +142,11 @@ func main()  {
 	<-sig
 
 	close(stopChan)
+
+	// Jika mode hotspot aktif, bersihkan Wi-Fi dan firewall NAT
+	if *hotspotFlag {
+		hotspot.StopHotspot()
+	}
 
 	// Kembalikan DNS ke default DHCP
 	_ = exec.Command("resolvectl", "revert", iface.Name).Run()
