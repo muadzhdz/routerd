@@ -4,146 +4,86 @@ import (
 	"flag"
 	"log"
 	"net"
-	"os"
 	"os/exec"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/link"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muadzhdz/routerd/pkg/dashboard"
 	"github.com/muadzhdz/routerd/pkg/dns"
+	"github.com/muadzhdz/routerd/pkg/engine"
 	"github.com/muadzhdz/routerd/pkg/hotspot"
-	"github.com/muadzhdz/routerd/pkg/netutil"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpf bpf bpf/xdp_prog.c
-
-func main()  {
+func main() {
 	ifaceFlag := flag.String("iface", "", "Interface jaringan target (kosongkan untuk auto-detect)")
 	hotspotFlag := flag.Bool("hotspot", false, "Aktifkan Wi-Fi Hotspot & Stealth NAT Router")
 	ssidFlag := flag.String("ssid", "routerd", "Nama SSID Wi-Fi Hotspot")
 	passFlag := flag.String("password", "routerd123", "Password Wi-Fi Hotspot (min 8 karakter)")
 	flag.Parse()
 
-	// 1. Load eBPF objects ke kernel
-	objs := bpfObjects{}
-	if err := loadBpfObjects(&objs, nil); err != nil {
-		log.Fatalf("Gagal me-load eBPF objects: %v", err)
-	}
-	defer objs.Close()
-
-	// 2. Cari interface target
-	var iface *net.Interface
-  var err error
-
-  if *ifaceFlag == "" {
-      iface, err = netutil.GetDefaultInterface()
-      if err != nil {
-          log.Fatalf("Gagal auto-detect interface: %v", err)
-      }
-      log.Printf("AUTO-DETECT: Interface aktif terdeteksi -> [%s]", iface.Name)
-  } else {
-      iface, err = net.InterfaceByName(*ifaceFlag)
-      if err != nil {
-          log.Fatalf("Interface %s tidak ditemukan: %v", *ifaceFlag, err)
-      }
-  }
-
-	// 3. Pasang INGRESS HOOK (Hanya pasang XDP jika di 'lo' agar kartu Wi-Fi tidak kaget/link flap)
-	if iface.Name == "lo" {
-		lXdp, err := link.AttachXDP(link.XDPOptions{
-			Program:		objs.XdpRouterFunc,
-			Interface: 	iface.Index,
-		})
-		if err != nil {
-			log.Printf("Peringatan: Gagal attach XDP ke %s: %v", iface.Name, err)
-		} else {
-			defer lXdp.Close()
-			log.Printf("Ingress XDP aktif di [%s]", iface.Name)
-		}
-	} else {
-		log.Println("Mode Wi-Fi fisik: Melewati XDP agar kartu jaringan tetap 100% stabil")
-	}
-	// 4. Pasang EGRESS HOOK (TCX Egress - DPI Hunter)
-	lTc, err := link.AttachTCX(link.TCXOptions{
-		Program: objs.TcEgressFunc,
-		Attach: ebpf.AttachTCXEgress,
-		Interface: iface.Index,
+	// 1. Inisialisasi & Start eBPF Packet Engine (Deep Module)
+	eng, err := engine.Start(engine.Config{
+		InterfaceName: *ifaceFlag,
+		XDPMode:       engine.XDPModeAuto,
 	})
-
 	if err != nil {
-		log.Fatalf("Gagal Attach TCX Egress ke %s: %v", iface.Name, err)
+		log.Fatalf("Gagal menjalankan eBPF Engine: %v", err)
 	}
-	defer lTc.Close()
+	defer eng.Close()
 
-	log.Printf("SUCCESS: Engine TCX eBPF AKTIF di interface [%s]!", iface.Name)
-	log.Println("Memburu paket TLS ClientHello... Tekan [Ctrl + C] untuk keluar.")
+	iface := eng.Interface()
+	log.Printf("SUCCESS: eBPF Engine AKTIF di interface [%s]!", iface.Name)
 
-	// 4b. Pasang INGRESS HOOK (TCX Ingress - The TCP Window Clamper)
-  lTcIngress, err := link.AttachTCX(link.TCXOptions{
-    Program:   objs.TcIngressFunc,
-    Attach:    ebpf.AttachTCXIngress,
-    Interface: iface.Index,
-  })
+	// 2. Jalankan Stealth DoH DNS Proxy dengan channel Telemetry
+	stopChan := make(chan struct{})
+	dnsEventChan := make(chan dns.DNSEvent, 100)
 
-  if err != nil {
-  	log.Fatalf("Gagal Attach TCX Ingress ke %s: %v", iface.Name, err)
-  }
+	go func() {
+		if err := dns.StartDoHServer("127.0.0.1:53", stopChan, dnsEventChan); err != nil {
+			log.Printf("Peringatan: DoH Server error: %v", err)
+		}
+	}()
 
-  defer lTcIngress.Close()
-  log.Printf("SUCCESS: Engine TCX Ingress & Egress AKTIF di interface [%s]!", iface.Name)	
-	// 4c. Jalankan Stealth DoH DNS Proxy di background
-  stopChan := make(chan struct{})
-  go func() {
-      if err := dns.StartDoHServer("127.0.0.1:53", stopChan); err != nil {
-          log.Printf("Peringatan: DoH Server error: %v", err)
-      }
-  }()
+	// Alihkan DNS interface target ke 127.0.0.1 via systemd-resolved
+	_ = exec.Command("resolvectl", "dns", iface.Name, "127.0.0.1").Run()
+	_ = exec.Command("resolvectl", "flush-caches").Run()
+	log.Printf("SUCCESS: System DNS [%s] dialihkan ke 127.0.0.1 (DoH Cloudflare)!", iface.Name)
 
-	// Alihkan DNS wlp2s0 ke 127.0.0.1 via systemd-resolved
-  _ = exec.Command("resolvectl", "dns", iface.Name, "127.0.0.1").Run()
-  _ = exec.Command("resolvectl", "flush-caches").Run()
-  log.Printf("SUCCESS: System DNS [%s] dialihkan ke 127.0.0.1 (DoH Cloudflare)!", iface.Name)
-
-	// 4d. Jika flag -hotspot aktif: Nyalakan Wi-Fi Hotspot & Stealth NAT!
+	// 3. Jika flag -hotspot aktif: Nyalakan Wi-Fi Hotspot & Stealth NAT
 	if *hotspotFlag {
 		if err := hotspot.StartHotspot(iface.Name, *ssidFlag, *passFlag); err != nil {
 			log.Printf("Peringatan Hotspot: %v", err)
 		}
 	}
 
-	// 5. Goroutine Monitoring
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				var helloCount uint64
-				var clampCount uint64
-				key := uint32(0)
-
-				_ = objs.ClientHelloCount.Lookup(key, &helloCount)
-				_ = objs.SynackClampCount.Lookup(key, &clampCount)
-
-				log.Printf("[HUD Jaringan] INGRESS SYN/ACK CLAMP: %d | EGRESS TLS CLIENTHELLO: %d", clampCount, helloCount)
-
-			case <-stopChan:
-				return
+	// 4. Deteksi WAN IP
+	var wanIP string
+	if addrs, err := iface.Addrs(); err == nil {
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+				wanIP = ipNet.IP.String()
+				break
 			}
 		}
-	}()
+	}
 
-	// 6. Tunggu Ctrl+C
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	// 5. Jalankan TUI Dashboard
+	dashCfg := dashboard.Config{
+		WANIface:      iface.Name,
+		WANIP:         wanIP,
+		HotspotActive: *hotspotFlag,
+		SSID:          *ssidFlag,
+		StatsProvider: eng,
+		DNSEventChan:  dnsEventChan,
+	}
 
+	p := tea.NewProgram(dashboard.NewModel(dashCfg), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		log.Printf("Error menjalankan dashboard: %v", err)
+	}
+
+	// 6. Cleanup saat keluar dari dashboard ([q] / Ctrl+C)
 	close(stopChan)
 
-	// Jika mode hotspot aktif, bersihkan Wi-Fi dan firewall NAT
 	if *hotspotFlag {
 		hotspot.StopHotspot()
 	}

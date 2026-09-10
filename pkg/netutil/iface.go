@@ -3,6 +3,7 @@ package netutil
 import (
     "fmt"
     "net"
+    "os"
 )
 
 // GetDefaultInterface mencari interface jaringan aktif yang memiliki rute ke internet
@@ -42,4 +43,15 @@ func GetDefaultInterface() (*net.Interface, error) {
     }
 
     return nil, fmt.Errorf("interface untuk IP %s tidak ditemukan", localAddr.IP)
+}
+
+// IsWireless memeriksa apakah sebuah interface adalah wireless device via Linux sysfs (/sys/class/net/<iface>/wireless).
+func IsWireless(ifaceName string) bool {
+    path := fmt.Sprintf("/sys/class/net/%s/wireless", ifaceName)
+    _, err := netutilStat(path)
+    return err == nil
+}
+
+var netutilStat = func(name string) (any, error) {
+    return os.Stat(name)
 }

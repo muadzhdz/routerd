@@ -1,0 +1,3 @@
+# Encapsulate eBPF Kernel Lifecycle Behind Deep Packet Engine
+
+We encapsulate eBPF program loading, TCX/XDP attachment, memory locking limits, and telemetry map polling inside a deep `pkg/engine` module. Previously, `main.go` leaked low-level kernel invariants (`bpfObjects`, map pointers, raw links) directly to callers and UI dashboard, preventing non-root testing and scattering kernel lifecycle error handling. By hiding map internals behind a typed `StatsSnapshot` and moving `bpf2go` bindings to `pkg/engine/bpf/`, callers gain an atomic `Start(cfg)` / `Close()` lifecycle with non-root mockability.

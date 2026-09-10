@@ -1,0 +1,1366 @@
+package dashboard
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
+	"github.com/muadzhdz/routerd/pkg/dns"
+	"github.com/muadzhdz/routerd/pkg/engine"
+	"github.com/muadzhdz/routerd/pkg/hotspot"
+)
+
+var sparkBlocks = []rune{' ', ' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+
+// Config membawa parameter awal untuk inisialisasi dashboard
+type Config struct {
+	WANIface      string
+	WANIP         string
+	HotspotActive bool
+	SSID          string
+	StatsProvider engine.StatsProvider
+	DNSEventChan  <-chan dns.DNSEvent
+	ShutdownFunc  func()
+}
+
+// Model merepresentasikan state penuh dashboard TUI (The Elm Architecture)
+type Model struct {
+	cfg       Config
+	width     int
+	height    int
+	startTime time.Time
+
+	// Counters
+	prevClampCount  uint64
+	totalClampCount uint64
+	clampRate       int
+	peakClampRate   int
+	clampHistory    []int
+
+	prevHelloCount  uint64
+	totalHelloCount uint64
+
+	totalDNSCount uint64
+	dnsRate       int
+	peakDNSRate   int
+	avgDNSLatency time.Duration
+	dnsHistory    []int
+
+	// Bandwidth Telemetry (from /proc/net/dev)
+	prevRxBytes uint64
+	prevTxBytes uint64
+	totalRx     uint64
+	totalTx     uint64
+	rxRate      uint64 // B/s
+	txRate      uint64 // B/s
+	rxPeak      uint64
+	txPeak      uint64
+	rxHistory   []int // in KB/s
+	txHistory   []int // in KB/s
+
+	// LAN / Hotspot Bandwidth Telemetry (ap0)
+	prevApRx    uint64
+	prevApTx    uint64
+	totalApRx   uint64
+	totalApTx   uint64
+	apRxRate    uint64
+	apTxRate    uint64
+	apRxPeak    uint64
+	apTxPeak    uint64
+	apRxHistory []int // in KB/s
+	apTxHistory []int // in KB/s
+
+	// Interactivity & Focus
+	focusPane        int // 0 = STATIONS, 1 = LIVE FEED
+	selectedIdx      int
+	selectedLogIdx   int
+	logViewportStart int
+	netModeIdx       int // 0 = WAN (wlp2s0), 1 = LAN Hotspot (ap0)
+
+	clients        []hotspot.ConnectedClient
+	filterClientIP string
+	logs           []string
+	quitting       bool
+}
+
+type tickMsg time.Time
+type dnsMsg dns.DNSEvent
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
+func waitForDNSEvent(ch <-chan dns.DNSEvent) tea.Cmd {
+	return func() tea.Msg {
+		if ch == nil {
+			return nil
+		}
+		ev, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return dnsMsg(ev)
+	}
+}
+
+// NewModel membuat instance baru dari Model dashboard
+func NewModel(cfg Config) Model {
+	histLen := 50
+	rxInit, txInit := readNetDev(cfg.WANIface)
+	apRxInit, apTxInit := readNetDev("ap0")
+	return Model{
+		cfg:          cfg,
+		startTime:    time.Now(),
+		clampHistory: make([]int, histLen),
+		dnsHistory:   make([]int, histLen),
+		rxHistory:    make([]int, histLen),
+		txHistory:    make([]int, histLen),
+		apRxHistory:  make([]int, histLen),
+		apTxHistory:  make([]int, histLen),
+		prevRxBytes:  rxInit,
+		prevTxBytes:  txInit,
+		prevApRx:     apRxInit,
+		prevApTx:     apTxInit,
+		clients:      []hotspot.ConnectedClient{},
+		logs:         []string{fmt.Sprintf("[%s] Engine initialized. All eBPF hooks mounted.", time.Now().Format("15:04:05"))},
+	}
+}
+
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(
+		tickCmd(),
+		waitForDNSEvent(m.cfg.DNSEventChan),
+	)
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "ctrl+c":
+			m.quitting = true
+			if m.cfg.ShutdownFunc != nil {
+				m.cfg.ShutdownFunc()
+			}
+			return m, tea.Quit
+		case "tab":
+			m.focusPane = (m.focusPane + 1) % 2
+		case "b", "n":
+			if m.cfg.HotspotActive {
+				m.netModeIdx = (m.netModeIdx + 1) % 2
+			}
+		case "c":
+			m.logs = []string{fmt.Sprintf("[%s] Activity buffer cleared.", time.Now().Format("15:04:05"))}
+			m.selectedLogIdx = 0
+			m.logViewportStart = 0
+		case "r":
+			if m.cfg.HotspotActive {
+				clients, _ := hotspot.GetConnectedClients()
+				m.clients = clients
+			}
+		case "up", "k":
+			if m.focusPane == 0 {
+				if m.selectedIdx > 0 {
+					m.selectedIdx--
+				}
+			} else {
+				if m.selectedLogIdx > 0 {
+					m.selectedLogIdx--
+				}
+			}
+		case "down", "j":
+			if m.focusPane == 0 {
+				if m.selectedIdx < len(m.clients)-1 {
+					m.selectedIdx++
+				}
+			} else {
+				m.selectedLogIdx++
+			}
+		case "pgup":
+			if m.focusPane == 1 {
+				m.selectedLogIdx -= 6
+				if m.selectedLogIdx < 0 {
+					m.selectedLogIdx = 0
+				}
+			}
+		case "pgdown":
+			if m.focusPane == 1 {
+				m.selectedLogIdx += 6
+			}
+		case "end", "G":
+			if m.focusPane == 1 {
+				m.selectedLogIdx = 999999
+			}
+		case "home", "g":
+			if m.focusPane == 1 {
+				m.selectedLogIdx = 0
+			}
+		case "enter":
+			if m.focusPane == 0 {
+				if len(m.clients) > 0 && m.selectedIdx >= 0 && m.selectedIdx < len(m.clients) {
+					targetIP := m.clients[m.selectedIdx].IP
+					if m.filterClientIP == targetIP {
+						m.filterClientIP = "" // toggle off
+					} else {
+						m.filterClientIP = targetIP // toggle on
+					}
+					m.selectedLogIdx = 0
+					m.logViewportStart = 0
+				}
+			}
+		case "esc":
+			m.filterClientIP = ""
+			m.selectedLogIdx = 0
+			m.logViewportStart = 0
+		}
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+
+	case tickMsg:
+		// 1. Baca data eBPF Map via StatsProvider
+		var currentClamp uint64
+		var currentHello uint64
+
+		if m.cfg.StatsProvider != nil {
+			if snap, err := m.cfg.StatsProvider.Stats(); err == nil {
+				currentClamp = snap.ClampedPackets
+				currentHello = snap.ClientHellos
+			}
+		}
+
+		if m.prevClampCount > 0 && currentClamp >= m.prevClampCount {
+			m.clampRate = int(currentClamp - m.prevClampCount)
+		} else {
+			m.clampRate = 0
+		}
+		if m.clampRate > m.peakClampRate {
+			m.peakClampRate = m.clampRate
+		}
+		m.totalClampCount = currentClamp
+		m.prevClampCount = currentClamp
+
+		m.totalHelloCount = currentHello
+		m.prevHelloCount = currentHello
+
+		// 2. Bandwidth dari /proc/net/dev
+		curRx, curTx := readNetDev(m.cfg.WANIface)
+		if m.prevRxBytes > 0 && curRx >= m.prevRxBytes {
+			m.rxRate = curRx - m.prevRxBytes
+		}
+		if m.prevTxBytes > 0 && curTx >= m.prevTxBytes {
+			m.txRate = curTx - m.prevTxBytes
+		}
+		if m.rxRate > m.rxPeak {
+			m.rxPeak = m.rxRate
+		}
+		if m.txRate > m.txPeak {
+			m.txPeak = m.txRate
+		}
+		m.prevRxBytes = curRx
+		m.prevTxBytes = curTx
+		m.totalRx = curRx
+		m.totalTx = curTx
+
+		// Shift sparklines
+		m.clampHistory = append(m.clampHistory[1:], m.clampRate)
+		m.dnsHistory = append(m.dnsHistory[1:], m.dnsRate)
+		m.rxHistory = append(m.rxHistory[1:], int(m.rxRate/1024))
+		m.txHistory = append(m.txHistory[1:], int(m.txRate/1024))
+		m.dnsRate = 0
+
+		// Bandwidth telemetry untuk Hotspot LAN (ap0)
+		if m.cfg.HotspotActive {
+			apRx, apTx := readNetDev("ap0")
+			if m.prevApRx > 0 && apRx >= m.prevApRx {
+				m.apRxRate = apRx - m.prevApRx
+			} else {
+				m.apRxRate = 0
+			}
+			if m.prevApTx > 0 && apTx >= m.prevApTx {
+				m.apTxRate = apTx - m.prevApTx
+			} else {
+				m.apTxRate = 0
+			}
+			if m.apRxRate > m.apRxPeak {
+				m.apRxPeak = m.apRxRate
+			}
+			if m.apTxRate > m.apTxPeak {
+				m.apTxPeak = m.apTxRate
+			}
+			m.prevApRx = apRx
+			m.prevApTx = apTx
+			m.totalApRx = apRx
+			m.totalApTx = apTx
+			m.apRxHistory = append(m.apRxHistory[1:], int(m.apRxRate/1024))
+			m.apTxHistory = append(m.apTxHistory[1:], int(m.apTxRate/1024))
+
+			clients, err := hotspot.GetConnectedClients()
+			if err == nil {
+				m.clients = clients
+				if m.selectedIdx >= len(m.clients) && len(m.clients) > 0 {
+					m.selectedIdx = len(m.clients) - 1
+				}
+			}
+		}
+
+		cmds = append(cmds, tickCmd())
+
+	case dnsMsg:
+		m.totalDNSCount++
+		m.dnsRate++
+		if m.dnsRate > m.peakDNSRate {
+			m.peakDNSRate = m.dnsRate
+		}
+		if m.avgDNSLatency == 0 {
+			m.avgDNSLatency = msg.Latency
+		} else {
+			m.avgDNSLatency = (m.avgDNSLatency*4 + msg.Latency) / 5
+		}
+
+		statusStr := "OK"
+		if !msg.Success {
+			statusStr = "FAIL"
+		}
+		logLine := fmt.Sprintf("[%s] DNS %-15s -> %-24s (%v) [%s]",
+			time.Now().Format("15:04:05"),
+			msg.ClientIP,
+			msg.Domain,
+			msg.Latency.Round(time.Millisecond),
+			statusStr,
+		)
+		m.addLog(logLine)
+
+		cmds = append(cmds, waitForDNSEvent(m.cfg.DNSEventChan))
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) addLog(entry string) {
+	wasAtEnd := (m.selectedLogIdx >= len(m.logs)-1) || (m.selectedLogIdx == 0 && len(m.logs) == 0)
+	m.logs = append(m.logs, entry)
+	maxLogs := 100
+	if len(m.logs) > maxLogs {
+		m.logs = m.logs[len(m.logs)-maxLogs:]
+		if m.selectedLogIdx > 0 {
+			m.selectedLogIdx--
+		}
+	}
+	if wasAtEnd {
+		m.selectedLogIdx = len(m.logs) - 1
+	}
+}
+
+// readNetDev membaca RX dan TX byte dari /proc/net/dev
+func readNetDev(iface string) (rx uint64, tx uint64) {
+	data, err := os.ReadFile("/proc/net/dev")
+	if err != nil {
+		return 0, 0
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, iface+":") {
+			fields := strings.Fields(strings.ReplaceAll(line, ":", " "))
+			if len(fields) >= 10 {
+				r, _ := strconv.ParseUint(fields[1], 10, 64)
+				t, _ := strconv.ParseUint(fields[9], 10, 64)
+				return r, t
+			}
+		}
+	}
+	return 0, 0
+}
+
+func formatBytes(b uint64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case b >= gb:
+		return fmt.Sprintf("%.1f GiB", float64(b)/float64(gb))
+	case b >= mb:
+		return fmt.Sprintf("%.1f MiB", float64(b)/float64(mb))
+	case b >= kb:
+		return fmt.Sprintf("%.1f KiB", float64(b)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
+}
+
+func formatRate(bps uint64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case bps >= gb:
+		return fmt.Sprintf("%.2f GiB/s", float64(bps)/float64(gb))
+	case bps >= mb:
+		val := float64(bps) / float64(mb)
+		if val >= 100 {
+			return fmt.Sprintf("%.0f MiB/s", val)
+		} else if val >= 10 {
+			return fmt.Sprintf("%.1f MiB/s", val)
+		}
+		return fmt.Sprintf("%.2f MiB/s", val)
+	case bps >= kb:
+		val := float64(bps) / float64(kb)
+		if val >= 100 {
+			return fmt.Sprintf("%.0f KiB/s", val)
+		} else if val >= 10 {
+			return fmt.Sprintf("%.1f KiB/s", val)
+		}
+		return fmt.Sprintf("%.2f KiB/s", val)
+	default:
+		return fmt.Sprintf("%d Byte/s", bps)
+	}
+}
+
+func formatBits(bytes uint64) string {
+	bits := bytes * 8
+	const (
+		kb = 1000
+		mb = kb * 1000
+		gb = mb * 1000
+	)
+	switch {
+	case bits >= gb:
+		return fmt.Sprintf("%.2f Gibps", float64(bits)/float64(gb))
+	case bits >= mb:
+		val := float64(bits) / float64(mb)
+		if val >= 100 {
+			return fmt.Sprintf("%.0f Mibps", val)
+		} else if val >= 10 {
+			return fmt.Sprintf("%.1f Mibps", val)
+		}
+		return fmt.Sprintf("%.2f Mibps", val)
+	case bits >= kb:
+		val := float64(bits) / float64(kb)
+		if val >= 100 {
+			return fmt.Sprintf("%.0f Kibps", val)
+		} else if val >= 10 {
+			return fmt.Sprintf("%.1f Kibps", val)
+		}
+		return fmt.Sprintf("%.2f Kibps", val)
+	default:
+		return fmt.Sprintf("%d bps", bits)
+	}
+}
+
+func formatShortScale(b uint64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	if b <= 10*kb {
+		return "10K"
+	}
+	switch {
+	case b >= gb:
+		return fmt.Sprintf("%dG", b/gb)
+	case b >= mb:
+		return fmt.Sprintf("%dM", b/mb)
+	case b >= kb:
+		return fmt.Sprintf("%dK", b/kb)
+	default:
+		return "10K"
+	}
+}
+
+// makeGaugeBar menghasilkan progress bar btop: [██████░░░░░░]
+func makeGaugeBar(val, max int, width int) string {
+	if width <= 2 {
+		return ""
+	}
+	barLen := width - 2
+	if max <= 0 {
+		return "[" + strings.Repeat("░", barLen) + "]"
+	}
+	ratio := float64(val) / float64(max)
+	if ratio > 1.0 {
+		ratio = 1.0
+	}
+	if ratio < 0.0 {
+		ratio = 0.0
+	}
+	filled := int(ratio * float64(barLen))
+	empty := barLen - filled
+	return "[" + strings.Repeat("█", filled) + strings.Repeat("░", empty) + "]"
+}
+
+// makeSolidMeter menghasilkan bar meter kompak beresolusi tinggi dengan karakter ▰ dan ▱
+func makeSolidMeter(val, max int, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if max <= 0 {
+		return strings.Repeat("▱", width)
+	}
+	ratio := float64(val) / float64(max)
+	if ratio > 1.0 {
+		ratio = 1.0
+	}
+	if ratio < 0.0 {
+		ratio = 0.0
+	}
+	filled := int(ratio * float64(width))
+	empty := width - filled
+	return strings.Repeat("▰", filled) + strings.Repeat("▱", empty)
+}
+
+// renderSparkline mengubah slice nilai menjadi grafik Unicode block
+func renderSparkline(values []int, width int) string {
+	if len(values) == 0 || width <= 0 {
+		return ""
+	}
+	slice := values
+	if len(slice) > width {
+		slice = slice[len(slice)-width:]
+	}
+
+	max := 1
+	for _, v := range slice {
+		if v > max {
+			max = v
+		}
+	}
+
+	var sb strings.Builder
+	for _, v := range slice {
+		idx := int((float64(v) / float64(max)) * float64(len(sparkBlocks)-1))
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(sparkBlocks) {
+			idx = len(sparkBlocks) - 1
+		}
+		sb.WriteRune(sparkBlocks[idx])
+	}
+	if len(slice) < width {
+		sb.WriteString(strings.Repeat(" ", width-len(slice)))
+	}
+	return sb.String()
+}
+
+// renderBtopBox merender panel kotak dengan gaya btop yang menyatu di border
+func renderBtopBox(width, height int, tabs []string, centerTitle string, rightTitle string, contentLines []string) string {
+	if width < 12 || height < 3 {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	// 1. Top border with clean embedded tags (NO downward vertical stems)
+	// Format: ┌──[ tab1 ]──[ tab2 ]──────────────── center ──────────────── right ──┐
+	var header strings.Builder
+	header.WriteString("┌")
+	for _, t := range tabs {
+		header.WriteString("──[ " + t + " ]")
+	}
+	if len(tabs) == 0 {
+		header.WriteString("──")
+	}
+
+	headStr := header.String()
+	headW := runewidth.StringWidth(headStr)
+
+	if headW >= width-4 {
+		headStr = runewidth.Truncate(headStr, width-4, "")
+		sb.WriteString(headStr + "──┐\n")
+	} else {
+		// Adaptively fit rightTitle based on available width
+		candidates := []string{rightTitle}
+		if strings.Contains(rightTitle, "sync auto zero ") {
+			candidates = append(candidates, strings.Replace(rightTitle, "sync auto zero ", "", 1))
+		}
+
+		var rightDec string
+		var rightW int
+		for _, cand := range candidates {
+			if cand != "" {
+				rightDec = " " + cand + " ──"
+			} else {
+				rightDec = "──"
+			}
+			rightW = lipgloss.Width(rightDec)
+			if headW+rightW < width-4 {
+				break
+			}
+		}
+		if headW+rightW >= width-4 {
+			rightDec = "──"
+			rightW = 2
+		}
+
+		var centerDec string
+		if centerTitle != "" {
+			centerDec = " " + centerTitle + " "
+		}
+		centerW := lipgloss.Width(centerDec)
+
+		rem := width - headW - rightW - centerW - 1
+		if rem < 2 {
+			centerDec = ""
+			rem = width - headW - rightW - 1
+			if rem < 0 {
+				rem = 0
+			}
+		}
+
+		leftFill := rem / 2
+		rightFill := rem - leftFill
+		sb.WriteString(headStr)
+		sb.WriteString(strings.Repeat("─", leftFill))
+		sb.WriteString(centerDec)
+		sb.WriteString(strings.Repeat("─", rightFill))
+		sb.WriteString(rightDec)
+		sb.WriteString("┐\n")
+	}
+
+	// 2. Middle content lines
+	innerWidth := width - 4
+	innerRows := height - 2
+	for r := 0; r < innerRows; r++ {
+		line := ""
+		if r < len(contentLines) {
+			line = contentLines[r]
+		}
+		lineW := lipgloss.Width(line)
+		if lineW > innerWidth {
+			line = runewidth.Truncate(line, innerWidth, "…")
+			lineW = lipgloss.Width(line)
+		}
+		pad := innerWidth - lineW
+		if pad < 0 {
+			pad = 0
+		}
+		sb.WriteString("│ " + line + strings.Repeat(" ", pad) + " │\n")
+	}
+
+	// 3. Bottom border
+	botFill := width - 2
+	sb.WriteString("└" + strings.Repeat("─", botFill) + "┘")
+
+	return sb.String()
+}
+
+func makeLegendRow(innerW int, left, right string) string {
+	contentW := lipgloss.Width(left) + lipgloss.Width(right)
+	pad := innerW - contentW
+	if pad < 1 {
+		pad = 1
+	}
+	return "│ " + left + strings.Repeat(" ", pad) + right + " │"
+}
+
+var brailleMap = [4][2]int{
+	{0x01, 0x08},
+	{0x02, 0x10},
+	{0x04, 0x20},
+	{0x40, 0x80},
+}
+
+// renderBidirectionalBraille menghasilkan baris-baris grafik Braille resolusi tinggi (RX/Clamp ke atas, TX/DNS ke bawah)
+func renderBidirectionalBraille(width, height int, topData, botData []int, maxTop, maxBot int) []string {
+	if maxTop <= 0 {
+		maxTop = 10
+	}
+	if maxBot <= 0 {
+		maxBot = 10
+	}
+	if width <= 0 || height <= 2 {
+		return make([]string, height)
+	}
+
+	subW := width * 2
+	mid := height / 2
+	topSubH := mid * 4
+	botSubH := (height - 1 - mid) * 4
+
+	topDots := make([]int, subW)
+	botDots := make([]int, subW)
+
+	for i := 0; i < subW; i++ {
+		dataIdx := len(topData) - subW + i
+		valTop := 0
+		valBot := 0
+		if dataIdx >= 0 && dataIdx < len(topData) {
+			valTop = topData[dataIdx]
+		}
+		if dataIdx >= 0 && dataIdx < len(botData) {
+			valBot = botData[dataIdx]
+		}
+		topDots[i] = int(float64(valTop) / float64(maxTop) * float64(topSubH))
+		if topDots[i] > topSubH {
+			topDots[i] = topSubH
+		}
+		botDots[i] = int(float64(valBot) / float64(maxBot) * float64(botSubH))
+		if botDots[i] > botSubH {
+			botDots[i] = botSubH
+		}
+	}
+
+	lines := make([]string, height)
+	for r := 0; r < height; r++ {
+		var sb strings.Builder
+		if r < mid {
+			for c := 0; c < width; c++ {
+				mask := 0
+				for dotR := 0; dotR < 4; dotR++ {
+					subY := (mid-1-r)*4 + (3 - dotR) + 1
+					for dotC := 0; dotC < 2; dotC++ {
+						sx := c*2 + dotC
+						if sx < subW && topDots[sx] >= subY {
+							mask |= brailleMap[dotR][dotC]
+						}
+					}
+				}
+				if mask == 0 {
+					sb.WriteRune(' ')
+				} else {
+					sb.WriteRune(rune(0x2800 + mask))
+				}
+			}
+		} else if r == mid {
+			for c := 0; c < width; c++ {
+				sx0 := c * 2
+				sx1 := c*2 + 1
+				hasTraffic := (sx0 < subW && (topDots[sx0] > 0 || botDots[sx0] > 0)) ||
+					(sx1 < subW && (topDots[sx1] > 0 || botDots[sx1] > 0))
+				if hasTraffic {
+					sb.WriteString("┼")
+				} else {
+					sb.WriteString("┄")
+				}
+			}
+		} else {
+			for c := 0; c < width; c++ {
+				mask := 0
+				for dotR := 0; dotR < 4; dotR++ {
+					subY := (r-mid-1)*4 + dotR + 1
+					for dotC := 0; dotC < 2; dotC++ {
+						sx := c*2 + dotC
+						if sx < subW && botDots[sx] >= subY {
+							mask |= brailleMap[dotR][dotC]
+						}
+					}
+				}
+				if mask == 0 {
+					sb.WriteRune(' ')
+				} else {
+					sb.WriteRune(rune(0x2800 + mask))
+				}
+			}
+		}
+		lines[r] = sb.String()
+	}
+	return lines
+}
+
+// renderEbpfBox merender panel eBPF & DPI Scrambler dengan format grafik Braille resolusi tinggi dan layout khusus
+func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wanIface string,
+	clampRate, peakClampRate int, totalClamp uint64, clampHistory []int,
+	dnsRate, peakDNSRate int, totalDNS uint64, avgDNSLatency time.Duration, dnsHistory []int,
+	totalHello uint64) string {
+
+	innerW := width - 4
+	innerH := height - 2
+	if innerW < 40 || innerH < 4 {
+		return renderBtopBox(width, height, []string{"¹ebpf-tcx", "dpi-scrambler"}, currTime, "", nil)
+	}
+
+	// 1. Split horizontal: 50% untuk Braille Waveform, 50% untuk Kernel Telemetry Matrix
+	graphSectionW := int(float64(innerW) * 0.50)
+	matrixW := innerW - graphSectionW - 3
+	if matrixW < 36 {
+		matrixW = 36
+		graphSectionW = innerW - matrixW - 3
+	}
+
+	scaleW := 4
+	graphW := graphSectionW - scaleW - 1
+	if graphW < 4 {
+		graphW = 4
+	}
+
+	maxClamp := peakClampRate
+	if maxClamp <= 0 {
+		maxClamp = 10
+	}
+	maxDNS := peakDNSRate
+	if maxDNS <= 0 {
+		maxDNS = 10
+	}
+
+	brailleLines := renderBidirectionalBraille(graphW, innerH, clampHistory, dnsHistory, maxClamp, maxDNS)
+
+	// 2. Format Kernel Telemetry Matrix (Kanan) - High-tech, Clean, No Ugly Dots
+	clampMeter := makeSolidMeter(clampRate, 30, 8)
+	dnsMeter := makeSolidMeter(dnsRate, 30, 8)
+	helloMeter := makeSolidMeter(int(totalHello%30), 30, 8)
+
+	matrixLines := []string{
+		fmt.Sprintf("TCX Ingress   Hook [%s] -> ACTIVE (RFC 1624)", wanIface),
+		fmt.Sprintf("TCX Egress    Hook [%s] -> ACTIVE (DPI Guard)", wanIface),
+		fmt.Sprintf("SYN Clamping  %s %3d/s · Total: %4d pkts", clampMeter, clampRate, totalClamp),
+		fmt.Sprintf("DoH Resolver  %s %3d/s · Total: %4d reqs", dnsMeter, dnsRate, totalDNS),
+		fmt.Sprintf("TLS Scramble  %s %3d/s · Total: %4d pkts", helloMeter, 0, totalHello),
+		fmt.Sprintf("DoH Latency   %-6v (Cloudflare Wire-Format)", avgDNSLatency.Round(time.Millisecond)),
+		"Upstream DNS  1.1.1.1:443 (DoH RFC 8484)",
+		"Wi-Fi Shield  XDP Native Protection ENABLED",
+	}
+
+	matrixLen := len(matrixLines)
+	matrixPadTop := (innerH - matrixLen) / 2
+	if matrixPadTop < 0 {
+		matrixPadTop = 0
+	}
+
+	maxLineW := 0
+	for _, l := range matrixLines {
+		if w := runewidth.StringWidth(l); w > maxLineW {
+			maxLineW = w
+		}
+	}
+	matrixPadLeft := (matrixW - maxLineW) / 2
+	if matrixPadLeft < 0 {
+		matrixPadLeft = 0
+	}
+
+	var contentLines []string
+	for r := 0; r < innerH; r++ {
+		// Kiri: Scale + Braille Waveform
+		scaleStr := "    "
+		if r == 0 {
+			scaleStr = fmt.Sprintf("%-4s", fmt.Sprintf("%dp", maxClamp))
+		} else if r == innerH-1 {
+			scaleStr = fmt.Sprintf("%-4s", fmt.Sprintf("%dr", maxDNS))
+		}
+		gStr := brailleLines[r]
+		leftSide := fmt.Sprintf("%s %s", scaleStr, gStr)
+		leftSide = runewidth.Truncate(leftSide, graphSectionW, "")
+		padL := graphSectionW - lipgloss.Width(leftSide)
+		if padL > 0 {
+			leftSide += strings.Repeat(" ", padL)
+		}
+
+		// Kanan: Centered Kernel Matrix line
+		mStr := ""
+		lineIdx := r - matrixPadTop
+		if lineIdx >= 0 && lineIdx < matrixLen {
+			mStr = strings.Repeat(" ", matrixPadLeft) + matrixLines[lineIdx]
+		}
+		mStr = runewidth.Truncate(mStr, matrixW, "…")
+		padR := matrixW - lipgloss.Width(mStr)
+		if padR > 0 {
+			mStr += strings.Repeat(" ", padR)
+		}
+
+		contentLines = append(contentLines, leftSide+" │ "+mStr)
+	}
+
+	topTabs := []string{"¹ebpf-tcx", "dpi-scrambler"}
+	topRight := fmt.Sprintf("WAN: %s │ Uptime: %s", wanIface, uptime.Round(time.Second))
+	return renderBtopBox(width, height, topTabs, currTime, topRight, contentLines)
+}
+
+// renderBtopNetBox merender box network dengan dual waveform Braille dan floating legend box persis screenshot
+func renderBtopNetBox(width, height int, modeLabel, ifaceName, ipStr string, rxRate, txRate, rxPeak, txPeak, totalRx, totalTx uint64, rxHist, txHist []int) string {
+	innerW := width - 4
+	innerH := height - 2
+	if innerW < 44 || innerH < 4 {
+		tabs := []string{"³net", modeLabel + ": " + ipStr}
+		return renderBtopBox(width, height, tabs, "", ifaceName, nil)
+	}
+
+	// 1. Desain Floating Legend Box (Lebar 33 karakter, persis screenshot btop)
+	legendW := 33
+	innerLegendW := legendW - 4
+	topTitle := "download (" + modeLabel + ")"
+	botTitle := "upload (" + modeLabel + ")"
+	topFill := legendW - 2 - 1 - len(topTitle)
+	if topFill < 1 {
+		topFill = 1
+	}
+	botFill := legendW - 2 - 1 - len(botTitle)
+	if botFill < 1 {
+		botFill = 1
+	}
+
+	topBorder := "┌─" + topTitle + strings.Repeat("─", topFill) + "┐"
+	botBorder := "└─" + botTitle + strings.Repeat("─", botFill) + "┘"
+
+	legend := []string{
+		topBorder,
+		makeLegendRow(innerLegendW, fmt.Sprintf("▼ %s", formatRate(rxRate)), fmt.Sprintf("(%s)", formatBits(rxRate))),
+		makeLegendRow(innerLegendW, "▼ Top:", fmt.Sprintf("(%s)", formatBits(rxPeak))),
+		makeLegendRow(innerLegendW, "▼ Total:", formatBytes(totalRx)),
+		"│" + strings.Repeat(" ", legendW-2) + "│",
+		makeLegendRow(innerLegendW, fmt.Sprintf("▲ %s", formatRate(txRate)), fmt.Sprintf("(%s)", formatBits(txRate))),
+		makeLegendRow(innerLegendW, "▲ Top:", fmt.Sprintf("(%s)", formatBits(txPeak))),
+		makeLegendRow(innerLegendW, "▲ Total:", formatBytes(totalTx)),
+		botBorder,
+	}
+
+	// 2. Sisa lebar untuk Waveform Graph (scaleW=4, space=1, graphW, space=1, legendW=33 -> scaleW+1+graphW+1+legendW = innerW)
+	scaleW := 4 // untuk label misal "10K "
+	graphW := innerW - legendW - scaleW - 2
+	if graphW < 4 {
+		graphW = 4
+	}
+
+	// 3. Bangun baris-baris grafiknya dengan Braille Canvas
+	maxRx := int(rxPeak / 1024)
+	if maxRx <= 0 {
+		maxRx = 10
+	}
+	maxTx := int(txPeak / 1024)
+	if maxTx <= 0 {
+		maxTx = 10
+	}
+
+	brailleLines := renderBidirectionalBraille(graphW, innerH, rxHist, txHist, maxRx, maxTx)
+
+	var contentLines []string
+	legendStart := (innerH - len(legend)) / 2
+	if legendStart < 0 {
+		legendStart = 0
+	}
+
+	for r := 0; r < innerH; r++ {
+		// Scale text di sebelah kiri (10K di atas dan 10K di bawah persis screenshot btop)
+		scaleStr := "    "
+		if r == 0 {
+			scaleStr = fmt.Sprintf("%-4s", formatShortScale(rxPeak))
+		} else if r == innerH-1 {
+			scaleStr = fmt.Sprintf("%-4s", formatShortScale(txPeak))
+		}
+
+		graphStr := brailleLines[r]
+
+		// Floating legend di sebelah kanan
+		legStr := strings.Repeat(" ", legendW)
+		if r >= legendStart && r < legendStart+len(legend) {
+			legStr = legend[r-legendStart]
+		}
+
+		row := fmt.Sprintf("%s %s %s", scaleStr, graphStr, legStr)
+		contentLines = append(contentLines, row)
+	}
+
+	tabs := []string{"³net", modeLabel + ": " + ipStr}
+	rightTitle := fmt.Sprintf("sync auto zero ↢b %s n↣", ifaceName)
+	return renderBtopBox(width, height, tabs, "", rightTitle, contentLines)
+}
+
+func formatCardTop(title string, width int) string {
+	titleW := runewidth.StringWidth(title)
+	rem := width - titleW - 5
+	if rem < 0 {
+		return "┌" + strings.Repeat("─", max(0, width-2)) + "┐"
+	}
+	return "┌─ " + title + " " + strings.Repeat("─", rem) + "┐"
+}
+
+func formatCardLine(content string, width int) string {
+	inner := width - 4
+	if inner < 0 {
+		inner = 0
+	}
+	str := runewidth.Truncate(content, inner, "…")
+	pad := inner - runewidth.StringWidth(str)
+	if pad < 0 {
+		pad = 0
+	}
+	return "│ " + str + strings.Repeat(" ", pad) + " │"
+}
+
+func formatCardBot(width int) string {
+	return "└" + strings.Repeat("─", max(0, width-2)) + "┘"
+}
+
+// renderHotspotBox merender Box 2 [²hotspot] [stealth-nat] dengan arsitektur dual-card dan pipeline routing visual
+func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
+	innerW := width - 4
+	innerH := height - 2
+	if innerW < 30 || innerH < 4 {
+		return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", "", nil)
+	}
+
+	hotspotStatus := "DISABLED"
+	if cfg.HotspotActive {
+		hotspotStatus = fmt.Sprintf("ACTIVE (%s)", cfg.SSID)
+	}
+
+	leaseMeter := makeSolidMeter(clientsCount, 41, 8)
+
+	// Jika lebar mencukupi (>= 50 karakter), gunakan arsitektur dual-card yang centered
+	if innerW >= 50 && innerH >= 7 {
+		c1W := (innerW - 1) / 2
+		c2W := innerW - 1 - c1W
+
+		wanTarget := cfg.WANIface
+		if wanTarget == "" {
+			wanTarget = "WAN"
+		}
+
+		c1Lines := []string{
+			formatCardTop("Wi-Fi AP (ap0)", c1W),
+			formatCardLine(fmt.Sprintf("SSID: %s", cfg.SSID), c1W),
+			formatCardLine("Ch 36 · 5 GHz (80 MHz)", c1W),
+			formatCardLine("IP:   10.42.0.1/24", c1W),
+			formatCardLine("MAC:  9e:12:21:07:03:5f", c1W),
+			formatCardLine(fmt.Sprintf("DHCP: %s %d/41", leaseMeter, clientsCount), c1W),
+			formatCardBot(c1W),
+		}
+
+		c2Lines := []string{
+			formatCardTop("Stealth NAT Pipeline", c2W),
+			formatCardLine(fmt.Sprintf("Flow: [ap0] ──► [%s]", wanTarget), c2W),
+			formatCardLine(fmt.Sprintf("NAT:  MASQ -> %s", wanTarget), c2W),
+			formatCardLine("DNS:  DNAT 53 -> Local", c2W),
+			formatCardLine("Sys:  route_localnet=1", c2W),
+			formatCardLine("Fwd:  ESTABLISHED ACCEPT", c2W),
+			formatCardBot(c2W),
+		}
+
+		cardH := len(c1Lines)
+		padTop := (innerH - cardH) / 2
+		if padTop < 0 {
+			padTop = 0
+		}
+		padBot := innerH - cardH - padTop
+		if padBot < 0 {
+			padBot = 0
+		}
+
+		totalCardsW := c1W + 1 + c2W
+		leftPad := (innerW - totalCardsW) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		rightPad := innerW - totalCardsW - leftPad
+		if rightPad < 0 {
+			rightPad = 0
+		}
+
+		var merged []string
+		for r := 0; r < padTop; r++ {
+			merged = append(merged, strings.Repeat(" ", innerW))
+		}
+		for r := 0; r < cardH; r++ {
+			l1 := c1Lines[r]
+			l2 := c2Lines[r]
+			row := strings.Repeat(" ", leftPad) + l1 + " " + l2 + strings.Repeat(" ", rightPad)
+			merged = append(merged, row)
+		}
+		for r := 0; r < padBot; r++ {
+			merged = append(merged, strings.Repeat(" ", innerW))
+		}
+
+		return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", hotspotStatus, merged)
+	}
+
+	// Layout responsif bertingkat untuk lebar terbatas dengan vertikal centering
+	singleLines := []string{
+		"── Wi-Fi AP [ap0: 10.42.0.1/24] ───────────────────────",
+		fmt.Sprintf("SSID: %s  ·  5180 MHz (Ch 36 / 80 MHz)", cfg.SSID),
+		"BSSID: 9e:12:21:07:03:5f  ·  Mode: 802.11ac Virtual AP",
+		fmt.Sprintf("DHCP: %s %d/41 leases (10.42.0.10 - .50)", leaseMeter, clientsCount),
+		"── Stealth NAT & Kernel Pipeline ───────────────────────",
+		fmt.Sprintf("[ap0] ──► [DNAT :53] ──► [MASQUERADE] ──► [%s]", cfg.WANIface),
+		fmt.Sprintf("NAT: MASQUERADE -> %s  ·  DNS: Local DoH", cfg.WANIface),
+		"Martian: route_localnet=1  ·  Forward: ACCEPT",
+	}
+	sPadTop := (innerH - len(singleLines)) / 2
+	if sPadTop < 0 {
+		sPadTop = 0
+	}
+	var centeredSingle []string
+	for r := 0; r < sPadTop; r++ {
+		centeredSingle = append(centeredSingle, strings.Repeat(" ", innerW))
+	}
+	centeredSingle = append(centeredSingle, singleLines...)
+	for len(centeredSingle) < innerH {
+		centeredSingle = append(centeredSingle, strings.Repeat(" ", innerW))
+	}
+	return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", hotspotStatus, centeredSingle)
+}
+
+// View merender full-screen grid persis seperti layout btop
+func (m Model) View() string {
+	if m.quitting {
+		return "Shutting down routerd cleanly...\n"
+	}
+
+	totalW := m.width
+	totalH := m.height
+	if totalW < 100 {
+		totalW = 100
+	}
+	if totalH < 28 {
+		totalH = 28
+	}
+
+	uptime := time.Since(m.startTime).Round(time.Second)
+	currTime := time.Now().Format("15:04:05")
+
+	// ==========================================
+	// 1. TOP BOX: [¹ebpf-tcx] [dpi-scrambler]
+	// ==========================================
+	topHeight := int(float64(totalH) * 0.34)
+	if topHeight < 11 {
+		topHeight = 11
+	}
+
+	topBoxStr := renderEbpfBox(totalW, topHeight, currTime, uptime, m.cfg.WANIface,
+		m.clampRate, m.peakClampRate, m.totalClampCount, m.clampHistory,
+		m.dnsRate, m.peakDNSRate, m.totalDNSCount, m.avgDNSLatency, m.dnsHistory,
+		m.totalHelloCount)
+
+	// ==========================================
+	// 2. BOTTOM SECTION: GRID DUA KOLOM
+	// ==========================================
+	bottomH := totalH - topHeight - 1
+	leftW := int(float64(totalW) * 0.44)
+	if leftW < 46 {
+		leftW = 46
+	}
+	rightW := totalW - leftW
+
+	// --- 2A. BOX 2: [²hotspot] [stealth-nat] (Kiri Atas) ---
+	box2H := int(float64(bottomH) * 0.50)
+	box2Str := renderHotspotBox(leftW, box2H, m.cfg, len(m.clients))
+
+	// --- 2B. BOX 3: [³net] (Kiri Bawah - Otentik btop Net Panel WAN / LAN) ---
+	box3H := bottomH - box2H
+	var netModeLabel string
+	var netIface string
+	var netIP string
+	var netRxRate, netTxRate, netRxPeak, netTxPeak, netTotalRx, netTotalTx uint64
+	var netRxHist, netTxHist []int
+
+	if m.netModeIdx == 1 && m.cfg.HotspotActive {
+		netModeLabel = "LAN"
+		netIface = "ap0"
+		netIP = "10.42.0.1"
+		netRxRate = m.apRxRate
+		netTxRate = m.apTxRate
+		netRxPeak = m.apRxPeak
+		netTxPeak = m.apTxPeak
+		netTotalRx = m.totalApRx
+		netTotalTx = m.totalApTx
+		netRxHist = m.apRxHistory
+		netTxHist = m.apTxHistory
+	} else {
+		netModeLabel = "WAN"
+		netIface = m.cfg.WANIface
+		netIP = m.cfg.WANIP
+		if netIP == "" {
+			netIP = "10.100.2.185"
+		}
+		netRxRate = m.rxRate
+		netTxRate = m.txRate
+		netRxPeak = m.rxPeak
+		netTxPeak = m.txPeak
+		netTotalRx = m.totalRx
+		netTotalTx = m.totalTx
+		netRxHist = m.rxHistory
+		netTxHist = m.txHistory
+	}
+
+	box3Str := renderBtopNetBox(leftW, box3H, netModeLabel, netIface, netIP,
+		netRxRate, netTxRate, netRxPeak, netTxPeak, netTotalRx, netTotalTx, netRxHist, netTxHist)
+
+	leftCol := lipgloss.JoinVertical(lipgloss.Left, box2Str, box3Str)
+
+	// --- 2C. BOX 4: [⁴stations & inspector] (Kolom Kanan, Full Height) ---
+	box4Tabs := []string{"⁴stations & inspector"}
+	box4Right := fmt.Sprintf("Clients: %d", len(m.clients))
+
+	var box4Lines []string
+	box4InnerW := rightW - 4
+
+	// Header Tabel Client (adaptif dengan lebar kolom)
+	hostW := 16
+	if box4InnerW < 72 {
+		hostW = 12
+	}
+	headerLine := fmt.Sprintf("  %-*s %-15s %-17s %-9s %-8s",
+		hostW, "HOSTNAME", "IP ADDRESS", "MAC ADDRESS", "SIGNAL", "SPEED")
+	box4Lines = append(box4Lines, headerLine)
+	box4Lines = append(box4Lines, strings.Repeat("─", box4InnerW))
+
+	// Baris Client dengan seleksi panah dan scrolling
+	maxClientRows := 5
+	if len(m.clients) == 0 {
+		box4Lines = append(box4Lines, "  No active wireless stations connected yet.")
+	} else {
+		if m.selectedIdx < 0 {
+			m.selectedIdx = 0
+		}
+		if m.selectedIdx >= len(m.clients) {
+			m.selectedIdx = len(m.clients) - 1
+		}
+
+		startClientIdx := 0
+		if m.selectedIdx >= maxClientRows {
+			startClientIdx = m.selectedIdx - maxClientRows + 1
+		}
+		endClientIdx := startClientIdx + maxClientRows
+		if endClientIdx > len(m.clients) {
+			endClientIdx = len(m.clients)
+		}
+
+		for i := startClientIdx; i < endClientIdx; i++ {
+			c := m.clients[i]
+			prefix := "  "
+			suffix := ""
+			isSelected := (i == m.selectedIdx && m.focusPane == 0)
+			if isSelected {
+				prefix = "▸ "
+			}
+			if m.filterClientIP == c.IP {
+				suffix += " [FILTERED]"
+			}
+
+			line := fmt.Sprintf("%s%-*s %-15s %-17s %-9s %-8s%s",
+				prefix,
+				hostW,
+				runewidth.Truncate(c.Hostname, hostW, "…"),
+				c.IP,
+				c.MAC,
+				c.Signal,
+				runewidth.Truncate(c.TxBitrate, 8, ""),
+				suffix,
+			)
+			if isSelected {
+				line = lipgloss.NewStyle().Bold(true).Reverse(true).Render(line)
+			}
+			box4Lines = append(box4Lines, line)
+		}
+	}
+
+	// Pembatas ke Live Feed
+	box4Lines = append(box4Lines, "")
+
+	// Filter logs jika ada filter client aktif
+	var displayLogs []string
+	if m.filterClientIP != "" {
+		for _, l := range m.logs {
+			if strings.Contains(l, m.filterClientIP) {
+				displayLogs = append(displayLogs, l)
+			}
+		}
+		if len(displayLogs) == 0 {
+			displayLogs = append(displayLogs, fmt.Sprintf("No activity recorded yet for %s.", m.filterClientIP))
+		}
+	} else {
+		displayLogs = m.logs
+	}
+
+	// Clamp selectedLogIdx ke batas displayLogs
+	if m.selectedLogIdx < 0 {
+		m.selectedLogIdx = 0
+	}
+	if len(displayLogs) > 0 && m.selectedLogIdx >= len(displayLogs) {
+		m.selectedLogIdx = len(displayLogs) - 1
+	}
+
+	totalLogs := len(displayLogs)
+	currentLogNum := m.selectedLogIdx + 1
+	if totalLogs == 0 {
+		currentLogNum = 0
+	}
+
+	filterLabel := "LIVE SECURITY & DNS INSPECTION FEED"
+	if m.focusPane == 1 {
+		if m.filterClientIP != "" {
+			filterLabel = fmt.Sprintf("LIVE FEED [FILTERED: %s · SELECTOR %d/%d] (↑/↓ select, Tab stations, Esc clear)", m.filterClientIP, currentLogNum, totalLogs)
+		} else {
+			filterLabel = fmt.Sprintf("LIVE FEED [ACTIVE · SELECTOR %d/%d] (↑/↓ select & scroll, End latest, Tab stations)", currentLogNum, totalLogs)
+		}
+	} else if m.filterClientIP != "" {
+		filterLabel = fmt.Sprintf("LIVE FEED [FILTERED: %s · %d items] (Enter/Esc show all, Tab for live feed)", m.filterClientIP, totalLogs)
+	}
+	box4Lines = append(box4Lines, filterLabel)
+	box4Lines = append(box4Lines, strings.Repeat("─", box4InnerW))
+
+	// Live Logs dengan SELECTOR & SCROLLING VIEWPORT
+	remainingLogRows := (box4H_rows(bottomH)) - len(box4Lines)
+	if remainingLogRows > 0 {
+		// Pastikan m.selectedLogIdx selalu terlihat di viewport
+		if m.selectedLogIdx < m.logViewportStart {
+			m.logViewportStart = m.selectedLogIdx
+		}
+		if m.selectedLogIdx >= m.logViewportStart+remainingLogRows {
+			m.logViewportStart = m.selectedLogIdx - remainingLogRows + 1
+		}
+		maxStart := len(displayLogs) - remainingLogRows
+		if maxStart < 0 {
+			maxStart = 0
+		}
+		if m.logViewportStart > maxStart {
+			m.logViewportStart = maxStart
+		}
+		if m.logViewportStart < 0 {
+			m.logViewportStart = 0
+		}
+
+		startIdx := m.logViewportStart
+		endIdx := startIdx + remainingLogRows
+		if endIdx > len(displayLogs) {
+			endIdx = len(displayLogs)
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			line := displayLogs[i]
+			isSelected := (i == m.selectedLogIdx && m.focusPane == 1)
+			if isSelected {
+				line = lipgloss.NewStyle().Bold(true).Reverse(true).Render("▸ " + line)
+			} else {
+				line = "  " + line
+			}
+			box4Lines = append(box4Lines, line)
+		}
+	}
+
+	box4Str := renderBtopBox(rightW, bottomH, box4Tabs, "", box4Right, box4Lines)
+
+	// Gabungkan Kolom Kiri dan Kanan
+	bottomSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, box4Str)
+
+	// ==========================================
+	// 3. FOOTER LINE (btop style, centered)
+	// ==========================================
+	footerStyle := lipgloss.NewStyle().
+		Faint(true).
+		Width(totalW).
+		Align(lipgloss.Center)
+	footerMsg := "tab switch focus   ↑/↓ select station   ↵ filter   b/n switch WAN/LAN   c clear   q quit"
+	if m.focusPane == 1 {
+		footerMsg = "tab switch focus   ↑/↓ select log   PgUp/PgDn page   End latest   b/n switch WAN/LAN   c clear   q quit"
+	}
+	footer := footerStyle.Render(footerMsg)
+
+	return lipgloss.JoinVertical(lipgloss.Left, topBoxStr, bottomSection, footer)
+}
+
+func box4H_rows(totalH int) int {
+	return totalH - 2
+}
