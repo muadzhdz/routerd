@@ -33,15 +33,17 @@ func main() {
 	iface := eng.Interface()
 	log.Printf("SUCCESS: eBPF Engine AKTIF di interface [%s]!", iface.Name)
 
-	// 2. Jalankan Stealth DoH DNS Proxy dengan channel Telemetry
-	stopChan := make(chan struct{})
-	dnsEventChan := make(chan dns.DNSEvent, 100)
-
-	go func() {
-		if err := dns.StartDoHServer("127.0.0.1:53", stopChan, dnsEventChan); err != nil {
-			log.Printf("Peringatan: DoH Server error: %v", err)
-		}
-	}()
+	// 2. Jalankan Stealth DoH DNS Resolver Engine dengan In-Memory Cache & Fallback
+	dnsServer, err := dns.NewServer(dns.ServerConfig{
+		ListenAddr: "127.0.0.1:53",
+	})
+	if err != nil {
+		log.Fatalf("Gagal inisialisasi DNS Resolver: %v", err)
+	}
+	if err := dnsServer.Start(); err != nil {
+		log.Printf("Peringatan: Gagal start DNS Server: %v", err)
+	}
+	defer dnsServer.Close()
 
 	// Alihkan DNS interface target ke 127.0.0.1 via systemd-resolved
 	_ = exec.Command("resolvectl", "dns", iface.Name, "127.0.0.1").Run()
@@ -73,7 +75,7 @@ func main() {
 		HotspotActive: *hotspotFlag,
 		SSID:          *ssidFlag,
 		StatsProvider: eng,
-		DNSEventChan:  dnsEventChan,
+		DNSEventChan:  dnsServer.Events(),
 	}
 
 	p := tea.NewProgram(dashboard.NewModel(dashCfg), tea.WithAltScreen())
@@ -82,8 +84,6 @@ func main() {
 	}
 
 	// 6. Cleanup saat keluar dari dashboard ([q] / Ctrl+C)
-	close(stopChan)
-
 	if *hotspotFlag {
 		hotspot.StopHotspot()
 	}

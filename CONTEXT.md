@@ -23,3 +23,11 @@ _Avoid_: TLS Sniffer, Packet Spy
 **Stats Snapshot**:
 An immutable, typed record of packet counters sampled from kernel eBPF maps at a single point in time.
 _Avoid_: Map Dump, Telemetry Data
+
+**DNS Resolver**:
+The subsystem listening on UDP 53, resolving DNS wire messages via encrypted DoH upstreams with RFC 1035 TTL-aware caching and TID rewriting.
+_Avoid_: DNS Proxy, Forwarder
+
+**Wire Codec**:
+Logic operating directly on raw RFC 1035 octet streams without external third-party AST libraries.
+_Avoid_: Packet Parser, DNS Unmarshaler
