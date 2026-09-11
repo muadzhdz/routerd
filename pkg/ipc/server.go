@@ -116,10 +116,10 @@ func (s *Server) acceptLoop() {
 		s.mu.Lock()
 		s.nextID++
 		client := &clientConn{
-			id:        s.nextID,
-			conn:      conn,
-			sendChan:  make(chan []byte, 128),
-			done:      make(chan struct{}),
+			id:       s.nextID,
+			conn:     conn,
+			sendChan: make(chan []byte, 128),
+			done:     make(chan struct{}),
 		}
 		s.clients[client.id] = client
 		s.mu.Unlock()

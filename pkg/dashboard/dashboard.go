@@ -368,7 +368,6 @@ func (m *Model) applySnapshot(snap telemetry.Snapshot) {
 	}
 }
 
-
 func formatBytes(b uint64) string {
 	const (
 		kb = 1024

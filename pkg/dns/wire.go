@@ -167,21 +167,21 @@ func BuildSinkholeResponse(query []byte, clientTID uint16, qtype uint16) []byte 
 	case TypeA:
 		ancount = 1
 		answerBytes = make([]byte, 16)
-		binary.BigEndian.PutUint16(answerBytes[0:2], 0xc00c)  // Name pointer -> offset 12
-		binary.BigEndian.PutUint16(answerBytes[2:4], TypeA)   // Type A
-		binary.BigEndian.PutUint16(answerBytes[4:6], 1)       // Class IN
-		binary.BigEndian.PutUint32(answerBytes[6:10], 60)     // TTL: 60 seconds
-		binary.BigEndian.PutUint16(answerBytes[10:12], 4)     // RDLENGTH: 4 bytes
-		copy(answerBytes[12:16], []byte{0, 0, 0, 0})          // IP: 0.0.0.0
+		binary.BigEndian.PutUint16(answerBytes[0:2], 0xc00c) // Name pointer -> offset 12
+		binary.BigEndian.PutUint16(answerBytes[2:4], TypeA)  // Type A
+		binary.BigEndian.PutUint16(answerBytes[4:6], 1)      // Class IN
+		binary.BigEndian.PutUint32(answerBytes[6:10], 60)    // TTL: 60 seconds
+		binary.BigEndian.PutUint16(answerBytes[10:12], 4)    // RDLENGTH: 4 bytes
+		copy(answerBytes[12:16], []byte{0, 0, 0, 0})         // IP: 0.0.0.0
 
 	case TypeAAAA:
 		ancount = 1
 		answerBytes = make([]byte, 28)
-		binary.BigEndian.PutUint16(answerBytes[0:2], 0xc00c)  // Name pointer -> offset 12
-		binary.BigEndian.PutUint16(answerBytes[2:4], TypeAAAA)// Type AAAA
-		binary.BigEndian.PutUint16(answerBytes[4:6], 1)       // Class IN
-		binary.BigEndian.PutUint32(answerBytes[6:10], 60)     // TTL: 60 seconds
-		binary.BigEndian.PutUint16(answerBytes[10:12], 16)    // RDLENGTH: 16 bytes
+		binary.BigEndian.PutUint16(answerBytes[0:2], 0xc00c)   // Name pointer -> offset 12
+		binary.BigEndian.PutUint16(answerBytes[2:4], TypeAAAA) // Type AAAA
+		binary.BigEndian.PutUint16(answerBytes[4:6], 1)        // Class IN
+		binary.BigEndian.PutUint32(answerBytes[6:10], 60)      // TTL: 60 seconds
+		binary.BigEndian.PutUint16(answerBytes[10:12], 16)     // RDLENGTH: 16 bytes
 		// Bytes 12:28 are initialized to 0 (IPv6 ::)
 
 	default:
@@ -201,7 +201,7 @@ func BuildSinkholeResponse(query []byte, clientTID uint16, qtype uint16) []byte 
 	binary.BigEndian.PutUint16(resp[2:4], flags)
 	binary.BigEndian.PutUint16(resp[4:6], 1) // QDCOUNT = 1
 	binary.BigEndian.PutUint16(resp[6:8], ancount)
-	binary.BigEndian.PutUint16(resp[8:10], 0) // NSCOUNT = 0
+	binary.BigEndian.PutUint16(resp[8:10], 0)  // NSCOUNT = 0
 	binary.BigEndian.PutUint16(resp[10:12], 0) // ARCOUNT = 0
 
 	// Copy Question
@@ -233,10 +233,9 @@ func BuildServFailResponse(query []byte, clientTID uint16) []byte {
 		flags |= 0x0100 // Echo RD bit
 	}
 	binary.BigEndian.PutUint16(resp[2:4], flags)
-	binary.BigEndian.PutUint16(resp[6:8], 0)  // ANCOUNT = 0
-	binary.BigEndian.PutUint16(resp[8:10], 0) // NSCOUNT = 0
-	binary.BigEndian.PutUint16(resp[10:12], 0)// ARCOUNT = 0
+	binary.BigEndian.PutUint16(resp[6:8], 0)   // ANCOUNT = 0
+	binary.BigEndian.PutUint16(resp[8:10], 0)  // NSCOUNT = 0
+	binary.BigEndian.PutUint16(resp[10:12], 0) // ARCOUNT = 0
 
 	return resp
 }
-

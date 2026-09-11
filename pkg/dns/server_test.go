@@ -109,4 +109,3 @@ func TestServerAdBlockSinkhole(t *testing.T) {
 		t.Error("timeout waiting for sinkhole event")
 	}
 }
-

@@ -41,8 +41,8 @@ func TestCollectorSamplingAndPeaks(t *testing.T) {
 	col := NewCollector(cfg)
 
 	// Step 1: Simulate traffic surge
-	currentRx = 10000 + 20480 // Delta +20KB
-	currentTx = 5000 + 10240  // Delta +10KB
+	currentRx = 10000 + 20480            // Delta +20KB
+	currentTx = 5000 + 10240             // Delta +10KB
 	mockEngine.snap.ClampedPackets = 125 // Delta +25
 
 	snap1 := col.Sample()
@@ -69,8 +69,8 @@ func TestCollectorSamplingAndPeaks(t *testing.T) {
 	}
 
 	// Step 2: Traffic slows down, verify Peak is preserved
-	currentRx += 5120 // Delta +5KB
-	currentTx += 2048 // Delta +2KB
+	currentRx += 5120                   // Delta +5KB
+	currentTx += 2048                   // Delta +2KB
 	mockEngine.snap.ClampedPackets += 5 // Delta +5
 
 	snap2 := col.Sample()

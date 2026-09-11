@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Build, Vet & Race Detector
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Download & Verify Dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Compile Static Binary
+        run: CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o routerd .
+
+      - name: Static Code Analysis (go vet)
+        run: go vet ./...
+
+      - name: Gofmt Formatting Check
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Unformatted files detected:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Run Unit Tests with Race Detector
+        run: go test -race -count=1 -v ./...

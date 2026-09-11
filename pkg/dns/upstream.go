@@ -12,7 +12,7 @@ import (
 )
 
 var defaultUpstreams = []string{
-	"https://1.1.1.1/dns-query",      // Cloudflare Primary
+	"https://1.1.1.1/dns-query",       // Cloudflare Primary
 	"https://dns.google/dns-query",    // Google Fallback
 	"https://dns.quad9.net/dns-query", // Quad9 Fallback
 }

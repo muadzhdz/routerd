@@ -48,7 +48,7 @@ func buildMockResponse(domain string, qtype uint16, tid uint16, ttl uint32) []by
 	binary.BigEndian.PutUint16(rest[2:4], 1)     // CLASS IN
 	binary.BigEndian.PutUint32(rest[4:8], ttl)   // TTL
 	binary.BigEndian.PutUint16(rest[8:10], 4)    // RDLENGTH = 4 bytes (IPv4)
-	copy(rest[10:14], []byte{8, 8, 8, 8})       // RDATA
+	copy(rest[10:14], []byte{8, 8, 8, 8})        // RDATA
 
 	query = append(query, ans...)
 	query = append(query, rest...)
@@ -201,5 +201,3 @@ func TestBuildServFailResponse(t *testing.T) {
 		t.Error("expected nil for too short query")
 	}
 }
-
-
