@@ -14,6 +14,9 @@ func TestLoadMissingFileReturnsDefault(t *testing.T) {
 	if cfg.SSID != "routerd" || cfg.Password != "routerd123" {
 		t.Errorf("expected default SSID and password, got: %+v", cfg)
 	}
+	if cfg.VPNEnabled != false || cfg.VPNConfig != "/etc/routerd/vpn.conf" {
+		t.Errorf("expected default VPN settings, got: %+v", cfg)
+	}
 }
 
 func TestLoadValidConfigFile(t *testing.T) {
@@ -25,6 +28,8 @@ HOTSPOT_ENABLED=true
 DNS_UPSTREAMS=1.1.1.1, 8.8.8.8, 9.9.9.9
 BLOCK_ADS=true
 BLOCKLIST_FILE=/etc/routerd/custom-blocklist.txt
+VPN_ENABLED=true
+VPN_CONFIG=/etc/routerd/custom-vpn.conf
 `
 	tmpDir := t.TempDir()
 	confPath := filepath.Join(tmpDir, "routerd.conf")
@@ -57,6 +62,12 @@ BLOCKLIST_FILE=/etc/routerd/custom-blocklist.txt
 	}
 	if cfg.BlocklistFile != "/etc/routerd/custom-blocklist.txt" {
 		t.Errorf("expected BlocklistFile /etc/routerd/custom-blocklist.txt, got '%s'", cfg.BlocklistFile)
+	}
+	if !cfg.VPNEnabled {
+		t.Errorf("expected VPNEnabled true, got false")
+	}
+	if cfg.VPNConfig != "/etc/routerd/custom-vpn.conf" {
+		t.Errorf("expected VPNConfig /etc/routerd/custom-vpn.conf, got '%s'", cfg.VPNConfig)
 	}
 }
 

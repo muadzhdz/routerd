@@ -181,6 +181,9 @@ func (s *Server) handleQuery(clientAddr net.Addr, queryData []byte) {
 
 	resp, _, err := s.resolver.Query(ctx, queryData)
 	if err != nil {
+		if failResp := BuildServFailResponse(queryData, clientTID); failResp != nil {
+			_, _ = s.pc.WriteTo(failResp, clientAddr)
+		}
 		s.emitEvent(clientAddr.String(), domain, time.Since(start), false)
 		return
 	}

@@ -19,6 +19,8 @@ type FileConfig struct {
 	Upstreams     []string
 	BlockAds      bool
 	BlocklistFile string
+	VPNEnabled    bool
+	VPNConfig     string
 }
 
 // Default returns a FileConfig with sensible default parameters.
@@ -31,6 +33,8 @@ func Default() FileConfig {
 		Upstreams:     []string{"1.1.1.1", "8.8.8.8"},
 		BlockAds:      true,
 		BlocklistFile: "/etc/routerd/blocklist.txt",
+		VPNEnabled:    false,
+		VPNConfig:     "/etc/routerd/vpn.conf",
 	}
 }
 
@@ -114,6 +118,15 @@ func Load(path string) (FileConfig, error) {
 		case "BLOCKLIST_FILE", "BLOCKLIST_PATH", "BLOCKLIST":
 			if val != "" {
 				cfg.BlocklistFile = val
+			}
+		case "VPN", "VPN_ENABLED", "ENABLE_VPN":
+			b, err := strconv.ParseBool(val)
+			if err == nil {
+				cfg.VPNEnabled = b
+			}
+		case "VPN_CONFIG", "VPN_PROFILE", "VPN_CONF":
+			if val != "" {
+				cfg.VPNConfig = val
 			}
 		}
 	}

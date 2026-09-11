@@ -173,3 +173,33 @@ func TestBuildSinkholeResponse(t *testing.T) {
 	}
 }
 
+func TestBuildServFailResponse(t *testing.T) {
+	query := buildMockQuery("unreachable-upstream.example.com", TypeA, 0x55aa)
+	resp := BuildServFailResponse(query, 0x55aa)
+	if resp == nil {
+		t.Fatal("expected non-nil response for ServFail")
+	}
+
+	tid := binary.BigEndian.Uint16(resp[0:2])
+	if tid != 0x55aa {
+		t.Errorf("expected TID=0x55aa, got 0x%x", tid)
+	}
+
+	flags := binary.BigEndian.Uint16(resp[2:4])
+	rcode := flags & 0x000f
+	if rcode != 2 { // 2 == ServFail
+		t.Errorf("expected RCODE=2 (ServFail), got %d", rcode)
+	}
+
+	ancount := binary.BigEndian.Uint16(resp[6:8])
+	if ancount != 0 {
+		t.Errorf("expected ANCOUNT=0 for ServFail, got %d", ancount)
+	}
+
+	// Short query
+	if BuildServFailResponse([]byte{1, 2}, 0x12) != nil {
+		t.Error("expected nil for too short query")
+	}
+}
+
+

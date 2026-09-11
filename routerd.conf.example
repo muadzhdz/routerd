@@ -21,3 +21,10 @@ BLOCK_ADS=true
 
 # Path to ad/malware domain blocklist file
 BLOCKLIST_FILE=/etc/routerd/blocklist.txt
+
+# Optional WireGuard VPN Uplink Integration (true / false)
+VPN_ENABLED=false
+
+# Path to WireGuard VPN client profile (.conf)
+VPN_CONFIG=/etc/routerd/vpn.conf
+

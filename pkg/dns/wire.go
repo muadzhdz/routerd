@@ -215,3 +215,28 @@ func BuildSinkholeResponse(query []byte, clientTID uint16, qtype uint16) []byte 
 	return resp
 }
 
+// BuildServFailResponse constructs an RFC 1035 wire response indicating server failure (RCODE=2).
+// This prevents connected client applications from freezing or stalling during upstream DoH outages.
+func BuildServFailResponse(query []byte, clientTID uint16) []byte {
+	if len(query) < 12 {
+		return nil
+	}
+
+	resp := make([]byte, len(query))
+	copy(resp, query)
+
+	binary.BigEndian.PutUint16(resp[0:2], clientTID)
+
+	// Flags: QR=1 (Response), RCODE=2 (Server Failure), RA=1
+	flags := uint16(0x8182)
+	if len(query) >= 4 && (query[2]&0x01 != 0) {
+		flags |= 0x0100 // Echo RD bit
+	}
+	binary.BigEndian.PutUint16(resp[2:4], flags)
+	binary.BigEndian.PutUint16(resp[6:8], 0)  // ANCOUNT = 0
+	binary.BigEndian.PutUint16(resp[8:10], 0) // NSCOUNT = 0
+	binary.BigEndian.PutUint16(resp[10:12], 0)// ARCOUNT = 0
+
+	return resp
+}
+

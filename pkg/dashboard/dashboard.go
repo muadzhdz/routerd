@@ -22,6 +22,8 @@ type Config struct {
 	WANIP          string
 	HotspotActive  bool
 	SSID           string
+	VPNActive      bool
+	VPNIface       string
 	StatsProvider  engine.StatsProvider
 	DNSEventChan   <-chan dns.DNSEvent
 	SnapshotChan   <-chan telemetry.Snapshot
@@ -983,13 +985,32 @@ func formatCardBot(width int) string {
 func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 	innerW := width - 4
 	innerH := height - 2
+	tabs := []string{"²hotspot", "stealth-nat"}
+	if cfg.VPNActive {
+		tabs = append(tabs, "vpn")
+	}
+
 	if innerW < 30 || innerH < 4 {
-		return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", "", nil)
+		return renderBtopBox(width, height, tabs, "", "", nil)
 	}
 
 	hotspotStatus := "DISABLED"
 	if cfg.HotspotActive {
 		hotspotStatus = fmt.Sprintf("ACTIVE (%s)", cfg.SSID)
+	}
+	if cfg.VPNActive && cfg.VPNIface != "" {
+		if cfg.HotspotActive {
+			hotspotStatus += fmt.Sprintf(" · VPN: %s", cfg.VPNIface)
+		} else {
+			hotspotStatus = fmt.Sprintf("VPN: %s", cfg.VPNIface)
+		}
+	}
+
+	wanTarget := cfg.WANIface
+	if cfg.VPNActive && cfg.VPNIface != "" {
+		wanTarget = cfg.VPNIface + " (vpn)"
+	} else if wanTarget == "" {
+		wanTarget = "WAN"
 	}
 
 	leaseMeter := makeSolidMeter(clientsCount, 41, 8)
@@ -998,11 +1019,6 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 	if innerW >= 50 && innerH >= 7 {
 		c1W := (innerW - 1) / 2
 		c2W := innerW - 1 - c1W
-
-		wanTarget := cfg.WANIface
-		if wanTarget == "" {
-			wanTarget = "WAN"
-		}
 
 		c1Lines := []string{
 			formatCardTop("Wi-Fi AP (ap0)", c1W),
@@ -1058,7 +1074,7 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 			merged = append(merged, strings.Repeat(" ", innerW))
 		}
 
-		return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", hotspotStatus, merged)
+		return renderBtopBox(width, height, tabs, "", hotspotStatus, merged)
 	}
 
 	// Responsive tiered layout for constrained widths with vertical centering
@@ -1068,8 +1084,8 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 		"BSSID: 9e:12:21:07:03:5f  ·  Mode: 802.11ac Virtual AP",
 		fmt.Sprintf("DHCP: %s %d/41 leases (10.42.0.10 - .50)", leaseMeter, clientsCount),
 		"── Stealth NAT & Kernel Pipeline ───────────────────────",
-		fmt.Sprintf("[ap0] ──► [DNAT :53] ──► [MASQUERADE] ──► [%s]", cfg.WANIface),
-		fmt.Sprintf("NAT: MASQUERADE -> %s  ·  DNS: Local DoH", cfg.WANIface),
+		fmt.Sprintf("[ap0] ──► [DNAT :53] ──► [MASQUERADE] ──► [%s]", wanTarget),
+		fmt.Sprintf("NAT: MASQUERADE -> %s  ·  DNS: Local DoH", wanTarget),
 		"Martian: route_localnet=1  ·  Forward: ACCEPT",
 	}
 	sPadTop := (innerH - len(singleLines)) / 2
@@ -1084,7 +1100,7 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 	for len(centeredSingle) < innerH {
 		centeredSingle = append(centeredSingle, strings.Repeat(" ", innerW))
 	}
-	return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", hotspotStatus, centeredSingle)
+	return renderBtopBox(width, height, tabs, "", hotspotStatus, centeredSingle)
 }
 
 // View renders full-screen grid matching btop layout.

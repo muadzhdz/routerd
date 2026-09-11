@@ -48,6 +48,7 @@ check-deps:
 	@which hostapd >/dev/null 2>&1 && echo "  [OK] hostapd" || echo "  [MISSING] hostapd -> sudo pacman -S hostapd"
 	@which dnsmasq >/dev/null 2>&1 && echo "  [OK] dnsmasq" || echo "  [MISSING] dnsmasq -> sudo pacman -S dnsmasq"
 	@which iw >/dev/null 2>&1 && echo "  [OK] iw" || echo "  [MISSING] iw -> sudo pacman -S iw"
+	@which wg-quick >/dev/null 2>&1 && echo "  [OK] wireguard-tools (wg-quick)" || echo "  [OPTIONAL] wireguard-tools -> sudo pacman -S wireguard-tools (for VPN uplink)"
 
 install: build
 	@echo "==> Installing $(BIN) to $(DESTDIR)$(BINDIR)..."
@@ -76,6 +77,8 @@ install: build
 		echo "  Blocklist exists: preserved $(DESTDIR)$(SYSCONFDIR)/routerd/blocklist.txt"; \
 		echo "  Example updated: $(DESTDIR)$(SYSCONFDIR)/routerd/blocklist.txt.example"; \
 	fi
+	@install -m 600 vpn.conf.example $(DESTDIR)$(SYSCONFDIR)/routerd/vpn.conf.example
+	@echo "  Installed VPN template: $(DESTDIR)$(SYSCONFDIR)/routerd/vpn.conf.example"
 
 	@if [ -z "$(DESTDIR)" ] && command -v systemctl >/dev/null 2>&1; then \
 		echo "==> Reloading systemd daemon..."; \

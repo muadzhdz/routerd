@@ -1,0 +1,18 @@
+# routerd WireGuard Uplink Profile Template
+# Save your actual configuration as /etc/routerd/vpn.conf (chmod 0600)
+# WireGuard documentation: https://www.wireguard.com/quickstart/
+
+[Interface]
+# PrivateKey: Client private key generated via 'wg genkey'
+# PrivateKey = YOUR_PRIVATE_KEY_HERE
+Address = 10.2.0.2/32
+
+# DNS is handled natively by routerd DoH sinkholing resolver (127.0.0.1:53).
+# Any 'DNS =' line here will be safely bypassed by routerd to avoid resolvconf conflicts.
+
+[Peer]
+# PublicKey: Remote VPN server/peer public key
+# PublicKey = SERVER_PUBLIC_KEY_HERE
+Endpoint = 198.51.100.1:51820
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -18,9 +19,7 @@ const (
 	defaultSubnet    = "10.42.0.0/24"
 	defaultIP        = "10.42.0.1"
 	defaultInterface = "ap0"
-	hostapdConf      = "/tmp/routerd-hostapd.conf"
-	hostapdLogPath   = "/tmp/routerd-hostapd.log"
-	dnsmasqLeasePath = "/tmp/routerd-dnsmasq.leases"
+	defaultRunDir    = "/run/routerd"
 )
 
 // Config carries configuration for initializing the AP Controller.
@@ -31,6 +30,7 @@ type Config struct {
 	GatewayIP   string // Default "10.42.0.1"
 	SubnetCIDR  string // Default "10.42.0.0/24"
 	APInterface string // Default "ap0"
+	RunDir      string // Default "/run/routerd"
 }
 
 // Controller manages the lifecycle of hostapd, dnsmasq, and iptables Stealth NAT with LIFO rollback.
@@ -54,9 +54,23 @@ func NewController(cfg Config) *Controller {
 	if cfg.APInterface == "" {
 		cfg.APInterface = defaultInterface
 	}
+	if cfg.RunDir == "" {
+		cfg.RunDir = defaultRunDir
+	}
 	return &Controller{
 		cfg: cfg,
 	}
+}
+
+func (c *Controller) runtimePath(filename string) string {
+	runDir := c.cfg.RunDir
+	if runDir == "" {
+		runDir = defaultRunDir
+	}
+	if err := os.MkdirAll(runDir, 0755); err == nil {
+		return filepath.Join(runDir, filename)
+	}
+	return filepath.Join("/tmp", "routerd-"+filename)
 }
 
 func (c *Controller) addCleanup(fn func()) {
@@ -113,6 +127,10 @@ func (c *Controller) Start() error {
 	})
 
 	// 5. Write hostapd configuration
+	hostapdConf := c.runtimePath("hostapd.conf")
+	hostapdLogPath := c.runtimePath("hostapd.log")
+	dnsmasqLeasePath := c.runtimePath("dnsmasq.leases")
+
 	confContent := fmt.Sprintf(`interface=%s
 driver=nl80211
 ssid=%s
@@ -242,7 +260,10 @@ rsn_pairwise=CCMP
 // GetConnectedClients reads connected clients from DHCP leases and Wi-Fi radio using pure parsers.
 func (c *Controller) GetConnectedClients() ([]ConnectedClient, error) {
 	leases := make(map[string]ConnectedClient)
-	if data, err := os.ReadFile(dnsmasqLeasePath); err == nil {
+	leasePath := c.runtimePath("dnsmasq.leases")
+	if data, err := os.ReadFile(leasePath); err == nil {
+		leases = ParseDHCPLeases(string(data))
+	} else if data, err := os.ReadFile("/tmp/routerd-dnsmasq.leases"); err == nil {
 		leases = ParseDHCPLeases(string(data))
 	}
 

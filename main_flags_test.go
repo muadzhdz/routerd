@@ -25,6 +25,9 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				if opts.Headless != false {
 					t.Errorf("expected default headless false, got true")
 				}
+				if opts.VPN != false {
+					t.Errorf("expected default vpn false, got true")
+				}
 				if len(opts.ExplicitFlags) != 0 {
 					t.Errorf("expected 0 explicit flags, got %d", len(opts.ExplicitFlags))
 				}
@@ -38,6 +41,7 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				"--hotspot",
 				"--ssid", "alpha-net",
 				"--password", "secretpass123",
+				"--vpn",
 				"--headless",
 				"--attach",
 			},
@@ -57,13 +61,16 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				if opts.Password != "secretpass123" {
 					t.Errorf("expected password secretpass123, got %s", opts.Password)
 				}
+				if !opts.VPN {
+					t.Errorf("expected vpn true, got false")
+				}
 				if !opts.Headless {
 					t.Errorf("expected headless true, got false")
 				}
 				if !opts.Attach {
 					t.Errorf("expected attach true, got false")
 				}
-				if !opts.ExplicitFlags["config"] || !opts.ExplicitFlags["hotspot"] || !opts.ExplicitFlags["headless"] {
+				if !opts.ExplicitFlags["config"] || !opts.ExplicitFlags["hotspot"] || !opts.ExplicitFlags["vpn"] || !opts.ExplicitFlags["headless"] {
 					t.Errorf("expected explicit flags recorded, got: %+v", opts.ExplicitFlags)
 				}
 			},
@@ -76,6 +83,7 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				"-H",
 				"-s", "bravo-net",
 				"-p", "passphrase999",
+				"-V",
 				"-d",
 				"-a",
 			},
@@ -95,13 +103,16 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				if opts.Password != "passphrase999" {
 					t.Errorf("expected password passphrase999, got %s", opts.Password)
 				}
+				if !opts.VPN {
+					t.Errorf("expected vpn true, got false")
+				}
 				if !opts.Headless {
 					t.Errorf("expected headless true, got false")
 				}
 				if !opts.Attach {
 					t.Errorf("expected attach true, got false")
 				}
-				if !opts.ExplicitFlags["c"] || !opts.ExplicitFlags["H"] || !opts.ExplicitFlags["d"] {
+				if !opts.ExplicitFlags["c"] || !opts.ExplicitFlags["H"] || !opts.ExplicitFlags["V"] || !opts.ExplicitFlags["d"] {
 					t.Errorf("expected explicit short flags recorded, got: %+v", opts.ExplicitFlags)
 				}
 			},
@@ -112,6 +123,7 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				"--ssid=delta-wifi",
 				"--password=supersecret",
 				"--hotspot=true",
+				"--vpn=true",
 			},
 			validate: func(t *testing.T, opts *CLIOptions) {
 				if opts.SSID != "delta-wifi" {
@@ -122,6 +134,9 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 				}
 				if !opts.Hotspot {
 					t.Errorf("expected hotspot true, got false")
+				}
+				if !opts.VPN {
+					t.Errorf("expected vpn true, got false")
 				}
 			},
 		},
@@ -152,19 +167,20 @@ func TestCLIFlagParsingShortAndLong(t *testing.T) {
 
 func TestConfigPrecedence(t *testing.T) {
 	fileCfg := config.FileConfig{
-		Interface: "wlan0",
-		Hotspot:   true,
-		SSID:      "config-ssid",
-		Password:  "config-pass",
+		Interface:  "wlan0",
+		Hotspot:    true,
+		SSID:       "config-ssid",
+		Password:   "config-pass",
+		VPNEnabled: true,
 	}
 
 	t.Run("CLI Overrides Config File", func(t *testing.T) {
-		opts, err := parseCLIOptions([]string{"-s", "cli-ssid", "-p", "cli-pass", "-i", "eth1"})
+		opts, err := parseCLIOptions([]string{"-s", "cli-ssid", "-p", "cli-pass", "-i", "eth1", "-V=false"})
 		if err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 
-		iface, hotspot, ssid, pass := resolveConfig(opts, fileCfg)
+		iface, hotspot, ssid, pass, vpn := resolveConfig(opts, fileCfg)
 		if iface != "eth1" {
 			t.Errorf("expected iface eth1, got %s", iface)
 		}
@@ -177,6 +193,9 @@ func TestConfigPrecedence(t *testing.T) {
 		if pass != "cli-pass" {
 			t.Errorf("expected password cli-pass, got %s", pass)
 		}
+		if vpn != false {
+			t.Errorf("expected vpn false from CLI override, got true")
+		}
 	})
 
 	t.Run("Config File Fallback When No CLI Flags Given", func(t *testing.T) {
@@ -185,7 +204,7 @@ func TestConfigPrecedence(t *testing.T) {
 			t.Fatalf("parse error: %v", err)
 		}
 
-		iface, hotspot, ssid, pass := resolveConfig(opts, fileCfg)
+		iface, hotspot, ssid, pass, vpn := resolveConfig(opts, fileCfg)
 		if iface != "wlan0" {
 			t.Errorf("expected iface wlan0 from config, got %s", iface)
 		}
@@ -198,6 +217,9 @@ func TestConfigPrecedence(t *testing.T) {
 		if pass != "config-pass" {
 			t.Errorf("expected password config-pass from config, got %s", pass)
 		}
+		if !vpn {
+			t.Errorf("expected vpn true from config, got false")
+		}
 	})
 
 	t.Run("Explicit Hotspot Disable Overrides Config", func(t *testing.T) {
@@ -206,7 +228,7 @@ func TestConfigPrecedence(t *testing.T) {
 			t.Fatalf("parse error: %v", err)
 		}
 
-		_, hotspot, _, _ := resolveConfig(opts, fileCfg)
+		_, hotspot, _, _, _ := resolveConfig(opts, fileCfg)
 		if hotspot != false {
 			t.Errorf("expected hotspot false, got true")
 		}

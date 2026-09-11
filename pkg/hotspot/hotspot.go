@@ -7,6 +7,13 @@ var (
 	defaultCtrlMu sync.Mutex
 )
 
+// SetDefaultController registers an active Controller instance for package-level queries.
+func SetDefaultController(ctrl *Controller) {
+	defaultCtrlMu.Lock()
+	defer defaultCtrlMu.Unlock()
+	defaultCtrl = ctrl
+}
+
 // ConnectedClient represents metadata for a device connected to the hotspot.
 type ConnectedClient struct {
 	MAC       string

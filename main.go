@@ -22,6 +22,7 @@ import (
 	"github.com/muadzhdz/routerd/pkg/hotspot"
 	"github.com/muadzhdz/routerd/pkg/ipc"
 	"github.com/muadzhdz/routerd/pkg/telemetry"
+	"github.com/muadzhdz/routerd/pkg/vpn"
 )
 
 var (
@@ -91,6 +92,7 @@ type CLIOptions struct {
 	Headless      bool
 	Attach        bool
 	Version       bool
+	VPN           bool
 	ExplicitFlags map[string]bool
 }
 
@@ -113,6 +115,7 @@ func printUsage() {
 	fmt.Println("  -H, --hotspot        Enable Wi-Fi Access Point & Stealth NAT Router")
 	fmt.Println("  -s, --ssid NAME      Wi-Fi Hotspot SSID name (default: from config or 'routerd')")
 	fmt.Println("  -p, --password PASS  Wi-Fi Hotspot password (min 8 chars, default: from config)")
+	fmt.Println("  -V, --vpn            Enable WireGuard VPN uplink & policy routing")
 	fmt.Println("  -d, --headless       Run as background daemon without TUI Dashboard")
 	fmt.Println("  -a, --attach         Attach TUI to running background daemon")
 	fmt.Println("  -v, --version        Print routerd version and exit")
@@ -122,6 +125,7 @@ func printUsage() {
 	fmt.Println("  sudo routerd -d -H                  # Run background daemon with Wi-Fi AP")
 	fmt.Println("  routerd                             # Open TUI dashboard (auto-attaches to daemon)")
 	fmt.Println("  routerd clients                     # Quick view of connected stations")
+	fmt.Println("  sudo routerd -H -V                  # Hotspot + WireGuard VPN tunnel")
 	fmt.Println("  sudo routerd -H -s 'lab' -p 'pass'  # Standalone foreground router with custom AP")
 }
 
@@ -149,6 +153,9 @@ func parseCLIOptions(args []string) (*CLIOptions, error) {
 	fs.StringVar(&opts.Password, "password", "", "Wi-Fi Hotspot password (min 8 characters)")
 	fs.StringVar(&opts.Password, "p", "", "Wi-Fi Hotspot password (alias)")
 
+	fs.BoolVar(&opts.VPN, "vpn", false, "Enable WireGuard VPN uplink")
+	fs.BoolVar(&opts.VPN, "V", false, "Enable WireGuard VPN uplink (alias)")
+
 	fs.BoolVar(&opts.Headless, "headless", false, "Run as background daemon without TUI")
 	fs.BoolVar(&opts.Headless, "d", false, "Run as background daemon without TUI (alias)")
 
@@ -169,7 +176,7 @@ func parseCLIOptions(args []string) (*CLIOptions, error) {
 	return opts, nil
 }
 
-func resolveConfig(opts *CLIOptions, fileCfg config.FileConfig) (finalIface string, finalHotspot bool, finalSSID string, finalPassword string) {
+func resolveConfig(opts *CLIOptions, fileCfg config.FileConfig) (finalIface string, finalHotspot bool, finalSSID string, finalPassword string, finalVPN bool) {
 	finalIface = fileCfg.Interface
 	if opts.ExplicitFlags["iface"] || opts.ExplicitFlags["i"] {
 		finalIface = opts.Interface
@@ -190,7 +197,12 @@ func resolveConfig(opts *CLIOptions, fileCfg config.FileConfig) (finalIface stri
 		finalPassword = opts.Password
 	}
 
-	return finalIface, finalHotspot, finalSSID, finalPassword
+	finalVPN = fileCfg.VPNEnabled
+	if opts.ExplicitFlags["vpn"] || opts.ExplicitFlags["V"] {
+		finalVPN = opts.VPN
+	}
+
+	return finalIface, finalHotspot, finalSSID, finalPassword, finalVPN
 }
 
 func main() {
@@ -220,6 +232,7 @@ func main() {
 		opts.ExplicitFlags["hotspot"] || opts.ExplicitFlags["H"] ||
 		opts.ExplicitFlags["ssid"] || opts.ExplicitFlags["s"] ||
 		opts.ExplicitFlags["password"] || opts.ExplicitFlags["p"] ||
+		opts.ExplicitFlags["vpn"] || opts.ExplicitFlags["V"] ||
 		opts.ExplicitFlags["config"] || opts.ExplicitFlags["c"]
 
 	// 0B. If daemon is active in the background
@@ -256,6 +269,8 @@ func main() {
 			WANIP         string `json:"wan_ip"`
 			HotspotActive bool   `json:"hotspot_active"`
 			SSID          string `json:"ssid"`
+			VPNActive     bool   `json:"vpn_active"`
+			VPNIface      string `json:"vpn_iface"`
 		}
 		if rawStatus, err := client.SendCommand(ctx, "status_json"); err == nil {
 			_ = json.Unmarshal([]byte(rawStatus), &statusInfo)
@@ -271,6 +286,8 @@ func main() {
 			WANIP:          statusInfo.WANIP,
 			HotspotActive:  statusInfo.HotspotActive,
 			SSID:           statusInfo.SSID,
+			VPNActive:      statusInfo.VPNActive,
+			VPNIface:       statusInfo.VPNIface,
 			SnapshotChan:   snapCh,
 			DNSEventChan:   dnsCh,
 			IsRemoteClient: true,
@@ -306,7 +323,7 @@ func main() {
 	}
 
 	// Merge: CLI flags override config file
-	finalIface, finalHotspot, finalSSID, finalPassword := resolveConfig(opts, fileCfg)
+	finalIface, finalHotspot, finalSSID, finalPassword, finalVPN := resolveConfig(opts, fileCfg)
 
 	// Trap termination signals (SIGINT, SIGTERM)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -363,11 +380,34 @@ func main() {
 		if err := hotspotCtrl.Start(); err != nil {
 			log.Printf("Warning Hotspot: %v", err)
 		} else {
-			defer hotspotCtrl.Close()
+			hotspot.SetDefaultController(hotspotCtrl)
+			defer func() {
+				hotspot.SetDefaultController(nil)
+				_ = hotspotCtrl.Close()
+			}()
 		}
 	}
 
-	// 4. Detect WAN IP
+	// 4. If VPN is enabled: Start WireGuard VPN uplink & apply policy routing
+	var vpnCtrl *vpn.Controller
+	vpnActive := false
+	vpnIface := ""
+	if finalVPN {
+		vpnCtrl = vpn.NewController(vpn.Config{
+			ProfilePath: fileCfg.VPNConfig,
+			RunDir:      "/run/routerd",
+			APInterface: "ap0",
+		})
+		if vi, err := vpnCtrl.Start(); err != nil {
+			log.Printf("Warning VPN: %v (falling back to direct WAN uplink [%s])", err, iface.Name)
+		} else {
+			vpnActive = true
+			vpnIface = vi
+			defer vpnCtrl.Stop()
+		}
+	}
+
+	// 5. Detect WAN IP
 	var wanIP string
 	if addrs, err := iface.Addrs(); err == nil {
 		for _, addr := range addrs {
@@ -378,14 +418,18 @@ func main() {
 		}
 	}
 
-	// 5. Start Unix Domain Socket IPC Server
+	// 6. Start Unix Domain Socket IPC Server
 	ipcServer := ipc.NewServer(sockPath)
 	ipcServer.RegisterCommandHandler("status", func(args []string) (string, error) {
 		hotspotStr := "DISABLED"
 		if finalHotspot {
 			hotspotStr = fmt.Sprintf("ACTIVE (SSID: %s)", finalSSID)
 		}
-		return fmt.Sprintf("routerd active\nWAN: %s (%s)\nHotspot: %s", iface.Name, wanIP, hotspotStr), nil
+		vpnStr := "DISABLED"
+		if vpnActive {
+			vpnStr = fmt.Sprintf("ACTIVE (%s)", vpnIface)
+		}
+		return fmt.Sprintf("routerd active\nWAN: %s (%s)\nHotspot: %s\nVPN: %s", iface.Name, wanIP, hotspotStr, vpnStr), nil
 	})
 	ipcServer.RegisterCommandHandler("status_json", func(args []string) (string, error) {
 		data, _ := json.Marshal(map[string]any{
@@ -393,6 +437,8 @@ func main() {
 			"wan_ip":         wanIP,
 			"hotspot_active": finalHotspot,
 			"ssid":           finalSSID,
+			"vpn_active":     vpnActive,
+			"vpn_iface":      vpnIface,
 		})
 		return string(data), nil
 	})
@@ -419,7 +465,7 @@ func main() {
 		log.Printf("SUCCESS: IPC Server ACTIVE on [%s]", ipcServer.SocketPath())
 	}
 
-	// 6. Run TUI Dashboard or Headless Daemon mode
+	// 7. Run TUI Dashboard or Headless Daemon mode
 	if opts.Headless {
 		log.Println("=========================================================")
 		log.Println("routerd DAEMON ACTIVE IN BACKGROUND (HEADLESS MODE)")
@@ -427,6 +473,13 @@ func main() {
 		if finalHotspot {
 			log.Printf("Hotspot AP    : SSID [%s] | Gateway 10.42.0.1 (ap0)", finalSSID)
 			log.Println("Stealth NAT   : Port 53 redirected to DoH 127.0.0.1:53")
+		}
+		if vpnActive {
+			log.Printf("VPN Uplink    : WireGuard ACTIVE on [%s] (Policy Routing Table 51820)", vpnIface)
+		} else if finalVPN {
+			log.Printf("VPN Uplink    : FAILED (Fallback to direct WAN uplink [%s])", iface.Name)
+		} else {
+			log.Println("VPN Uplink    : DISABLED (Direct WAN uplink)")
 		}
 		log.Printf("IPC Socket    : %s (Type 'routerd' to attach TUI)", ipcServer.SocketPath())
 		log.Println("Waiting for termination signal (SIGTERM / Ctrl+C)...")
@@ -468,6 +521,8 @@ func main() {
 			WANIP:         wanIP,
 			HotspotActive: finalHotspot,
 			SSID:          finalSSID,
+			VPNActive:     vpnActive,
+			VPNIface:      vpnIface,
 			StatsProvider: eng,
 			DNSEventChan:  dnsServer.Events(),
 		}
@@ -478,5 +533,5 @@ func main() {
 		}
 	}
 
-	log.Println("Cleaning up Engine, Hotspot & Restoring DNS. Exiting cleanly!")
+	log.Println("Cleaning up Engine, VPN, Hotspot & Restoring DNS. Exiting cleanly!")
 }

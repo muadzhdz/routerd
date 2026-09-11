@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -22,10 +23,37 @@ type Resolver struct {
 	upstreams []string
 }
 
+// NormalizeUpstream converts a raw IP or DoH URL into a fully-qualified DoH HTTPS endpoint.
+func NormalizeUpstream(upstream string) string {
+	u := strings.TrimSpace(upstream)
+	if u == "" {
+		return ""
+	}
+	if strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://") {
+		return u
+	}
+	switch u {
+	case "1.1.1.1", "1.0.0.1":
+		return "https://1.1.1.1/dns-query"
+	case "8.8.8.8", "8.8.4.4":
+		return "https://dns.google/dns-query"
+	case "9.9.9.9", "149.112.112.112":
+		return "https://dns.quad9.net/dns-query"
+	default:
+		return fmt.Sprintf("https://%s/dns-query", u)
+	}
+}
+
 // NewResolver creates a new resolver with the specified DoH upstream endpoints.
 func NewResolver(upstreams []string, timeout time.Duration) *Resolver {
-	if len(upstreams) == 0 {
-		upstreams = defaultUpstreams
+	var normalized []string
+	for _, u := range upstreams {
+		if norm := NormalizeUpstream(u); norm != "" {
+			normalized = append(normalized, norm)
+		}
+	}
+	if len(normalized) == 0 {
+		normalized = defaultUpstreams
 	}
 	if timeout <= 0 {
 		timeout = 2 * time.Second
@@ -34,7 +62,7 @@ func NewResolver(upstreams []string, timeout time.Duration) *Resolver {
 		client: &http.Client{
 			Timeout: timeout,
 		},
-		upstreams: upstreams,
+		upstreams: normalized,
 	}
 }
 
