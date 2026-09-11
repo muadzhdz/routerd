@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-// StationStats menyimpan informasi sinyal dan bitrate Wi-Fi dari station dump
+// StationStats stores Wi-Fi signal and bitrate information parsed from station dump.
 type StationStats struct {
 	Signal    string
 	TxBitrate string
 }
 
-// ParseDHCPLeases membaca isi file lease dnsmasq dan mengembalikan map MAC -> ConnectedClient.
-// Format standar dnsmasq lease: <timestamp> <mac> <ip> <hostname> <client-id>
+// ParseDHCPLeases parses dnsmasq lease file content and returns a MAC -> ConnectedClient map.
+// Standard dnsmasq lease format: <timestamp> <mac> <ip> <hostname> <client-id>
 func ParseDHCPLeases(content string) map[string]ConnectedClient {
 	clients := make(map[string]ConnectedClient)
 	if strings.TrimSpace(content) == "" {
@@ -42,7 +42,7 @@ func ParseDHCPLeases(content string) map[string]ConnectedClient {
 	return clients
 }
 
-// ParseStationDump membaca output teks dari perintah `iw dev <iface> station dump`
+// ParseStationDump parses the text output of 'iw dev <iface> station dump'.
 func ParseStationDump(output string) map[string]StationStats {
 	stations := make(map[string]StationStats)
 	if strings.TrimSpace(output) == "" {
@@ -77,7 +77,7 @@ func ParseStationDump(output string) map[string]StationStats {
 	return stations
 }
 
-// MergeClientStats menggabungkan data DHCP lease dengan data sinyal Wi-Fi dari station dump
+// MergeClientStats merges DHCP lease data with Wi-Fi signal telemetry from station dump.
 func MergeClientStats(leases map[string]ConnectedClient, stats map[string]StationStats) []ConnectedClient {
 	merged := make(map[string]ConnectedClient)
 

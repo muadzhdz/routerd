@@ -9,13 +9,13 @@ import (
 func TestCacheTIDRewriting(t *testing.T) {
 	c := NewCache(100)
 
-	// Simpan respons dengan TID awal 0x1111
+	// Store response with initial TID 0x1111
 	originalResp := buildMockResponse("google.com", 1, 0x1111, 60)
 	key := CacheKey("google.com", 1)
 
 	c.Set(key, originalResp, 30*time.Second)
 
-	// Client baru meminta domain yang sama dengan TID 0x9999
+	// New client queries the same domain with TID 0x9999
 	newTID := uint16(0x9999)
 	hitResp, hit := c.Get(key, newTID)
 	if !hit {
@@ -27,7 +27,7 @@ func TestCacheTIDRewriting(t *testing.T) {
 		t.Fatalf("expected rewritten TID=0x%04X, got 0x%04X", newTID, gotTID)
 	}
 
-	// Pastikan raw response di dalam cache tidak ikut termutasi permanen
+	// Ensure the raw response inside cache was not mutated permanently
 	secondTID := uint16(0xABCD)
 	secondHit, _ := c.Get(key, secondTID)
 	gotSecondTID := binary.BigEndian.Uint16(secondHit[0:2])
@@ -41,22 +41,22 @@ func TestCacheExpirationAndEviction(t *testing.T) {
 
 	resp := buildMockResponse("test.com", 1, 0x1234, 10)
 
-	// Simpan dengan TTL pendek 50ms
+	// Store with short TTL 50ms
 	c.Set("short:1", resp, 50*time.Millisecond)
 
-	// Pastikan langsung hit
+	// Verify immediate hit
 	if _, hit := c.Get("short:1", 0x1234); !hit {
 		t.Fatal("expected immediate hit")
 	}
 
-	// Tunggu 70ms hingga expired
+	// Wait 70ms until expiration
 	time.Sleep(70 * time.Millisecond)
 
 	if _, hit := c.Get("short:1", 0x1234); hit {
 		t.Fatal("expected cache miss after expiration")
 	}
 
-	// Uji batas kapasitas (maxEntries = 2)
+	// Test capacity limit (maxEntries = 2)
 	c.Set("key1:1", resp, 10*time.Minute)
 	c.Set("key2:1", resp, 10*time.Minute)
 	c.Set("key3:1", resp, 10*time.Minute)

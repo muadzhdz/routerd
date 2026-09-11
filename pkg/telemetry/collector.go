@@ -7,10 +7,10 @@ import (
 	"github.com/muadzhdz/routerd/pkg/hotspot"
 )
 
-// HistorySize adalah jumlah titik data dalam ring buffer grafik Braille
+// HistorySize is the number of data points in the Braille graph ring buffer.
 const HistorySize = 48
 
-// BandwidthStats menyimpan ringkasan statistik bandwidth suatu interface
+// BandwidthStats stores summary bandwidth statistics for an interface.
 type BandwidthStats struct {
 	RxBytes   uint64
 	TxBytes   uint64
@@ -18,11 +18,11 @@ type BandwidthStats struct {
 	TxRate    uint64 // bytes per second
 	RxPeak    uint64 // bytes per second
 	TxPeak    uint64 // bytes per second
-	RxHistory []int  // dalam satuan KB/s untuk visualisasi grafik
-	TxHistory []int  // dalam satuan KB/s untuk visualisasi grafik
+	RxHistory []int  // in KB/s units for graph visualization
+	TxHistory []int  // in KB/s units for graph visualization
 }
 
-// Snapshot merepresentasikan data telemetry atomik hasil sampling pada satu interval waktu
+// Snapshot represents atomic telemetry data sampled at a specific time interval.
 type Snapshot struct {
 	WAN            BandwidthStats
 	LAN            BandwidthStats
@@ -34,7 +34,7 @@ type Snapshot struct {
 	Clients        []hotspot.ConnectedClient
 }
 
-// Config membawa konfigurasi untuk inisialisasi Telemetry Collector
+// Config carries configuration for initializing the Telemetry Collector.
 type Config struct {
 	WANIface      string
 	LANIface      string
@@ -44,12 +44,12 @@ type Config struct {
 	NetDevReader  func(iface string) (rx, tx uint64)
 }
 
-// Collector mengelola sampling rate, tracking nilai puncak, dan ring buffer riwayat
+// Collector manages sampling rates, peak value tracking, and history ring buffers.
 type Collector struct {
 	cfg Config
 	mu  sync.Mutex
 
-	// State WAN
+	// WAN State
 	prevRxBytes uint64
 	prevTxBytes uint64
 	wanRxPeak   uint64
@@ -57,7 +57,7 @@ type Collector struct {
 	wanRxHist   []int
 	wanTxHist   []int
 
-	// State LAN (Hotspot)
+	// LAN State (Hotspot)
 	prevLanRx uint64
 	prevLanTx uint64
 	lanRxPeak uint64
@@ -65,16 +65,16 @@ type Collector struct {
 	lanRxHist []int
 	lanTxHist []int
 
-	// State eBPF
+	// eBPF State
 	prevClampCount uint64
 	peakClampRate  int
 	clampHist      []int
 
-	// State Cache Clients
+	// Client Cache State
 	clients []hotspot.ConnectedClient
 }
 
-// NewCollector membuat instance Telemetry Collector baru
+// NewCollector creates a new Telemetry Collector instance.
 func NewCollector(cfg Config) *Collector {
 	if cfg.LANIface == "" {
 		cfg.LANIface = "ap0"
@@ -108,7 +108,7 @@ func NewCollector(cfg Config) *Collector {
 	return c
 }
 
-// Sample mengambil data terbaru, menghitung delta rates, dan menggeser riwayat sparkline
+// Sample captures fresh metrics, calculates delta rates, and shifts sparkline history.
 func (c *Collector) Sample() Snapshot {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -177,7 +177,7 @@ func (c *Collector) Sample() Snapshot {
 	copy(snap.WAN.RxHistory, c.wanRxHist)
 	copy(snap.WAN.TxHistory, c.wanTxHist)
 
-	// 3. Sampling LAN Bandwidth (jika Hotspot aktif)
+	// 3. Sampling LAN Bandwidth (if Hotspot is active)
 	if c.cfg.HotspotActive {
 		curLanRx, curLanTx := c.cfg.NetDevReader(c.cfg.LANIface)
 		var lanRxRate, lanTxRate uint64

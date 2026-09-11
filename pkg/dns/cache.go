@@ -12,14 +12,14 @@ type cacheEntry struct {
 	expiresAt   time.Time
 }
 
-// Cache menyimpan respons DNS di memori RAM dengan penegakan TTL dan penulisan ulang Transaction ID (TID).
+// Cache stores DNS responses in memory with TTL enforcement and Transaction ID (TID) rewriting.
 type Cache struct {
 	mu         sync.RWMutex
 	entries    map[string]cacheEntry
 	maxEntries int
 }
 
-// NewCache membuat instance cache berbatas.
+// NewCache creates a bounded cache instance.
 func NewCache(maxEntries int) *Cache {
 	if maxEntries <= 0 {
 		maxEntries = 2048
@@ -30,12 +30,12 @@ func NewCache(maxEntries int) *Cache {
 	}
 }
 
-// CacheKey menghasilkan kunci cache dari domain dan QType.
+// CacheKey generates a cache key from domain and QType.
 func CacheKey(domain string, qtype uint16) string {
 	return fmt.Sprintf("%s:%d", domain, qtype)
 }
 
-// Get mengambil respons dari cache jika masih berlaku, dan menulis ulang TID client baru ke offset 0-1.
+// Get retrieves a response from cache if not expired, rewriting the client's new TID at offset 0-1.
 func (c *Cache) Get(key string, newTID uint16) ([]byte, bool) {
 	c.mu.RLock()
 	entry, found := c.entries[key]
@@ -52,7 +52,7 @@ func (c *Cache) Get(key string, newTID uint16) ([]byte, bool) {
 		return nil, false
 	}
 
-	// Invariant RFC 1035: Duplikasi respons dan tulis ulang TID baru agar client menerima TID yang sesuai
+	// RFC 1035 Invariant: Duplicate response and rewrite the client's TID so client accepts the answer
 	respCopy := make([]byte, len(entry.rawResponse))
 	copy(respCopy, entry.rawResponse)
 	binary.BigEndian.PutUint16(respCopy[0:2], newTID)
@@ -60,7 +60,7 @@ func (c *Cache) Get(key string, newTID uint16) ([]byte, bool) {
 	return respCopy, true
 }
 
-// Set menyimpan respons DNS ke dalam cache dengan TTL tertentu.
+// Set stores a DNS response into cache with the specified TTL.
 func (c *Cache) Set(key string, rawResponse []byte, ttl time.Duration) {
 	if len(rawResponse) < 12 || ttl <= 0 {
 		return
@@ -72,7 +72,7 @@ func (c *Cache) Set(key string, rawResponse []byte, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Jika kapasitas penuh, buang entri kedaluwarsa atau entri acak
+	// If at capacity, evict expired entries or an arbitrary entry
 	if len(c.entries) >= c.maxEntries {
 		now := time.Now()
 		evicted := false
@@ -84,7 +84,6 @@ func (c *Cache) Set(key string, rawResponse []byte, ttl time.Duration) {
 			}
 		}
 		if !evicted {
-			// Jika belum ada yang kedaluwarsa, buang satu entri sembarang
 			for k := range c.entries {
 				delete(c.entries, k)
 				break
@@ -98,14 +97,14 @@ func (c *Cache) Set(key string, rawResponse []byte, ttl time.Duration) {
 	}
 }
 
-// Len mengembalikan jumlah entri aktif di cache.
+// Len returns the count of active cache entries.
 func (c *Cache) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.entries)
 }
 
-// Prune membersihkan semua entri yang sudah lewat masa berlakunya.
+// Prune removes all expired entries from cache.
 func (c *Cache) Prune() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

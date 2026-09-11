@@ -16,13 +16,13 @@ var defaultUpstreams = []string{
 	"https://dns.quad9.net/dns-query", // Quad9 Fallback
 }
 
-// Resolver menghubungi upstream DoH dengan mekanisme failover berurutan.
+// Resolver queries upstream DoH endpoints with sequential failover.
 type Resolver struct {
 	client    *http.Client
 	upstreams []string
 }
 
-// NewResolver membuat resolver baru dengan daftar endpoint upstream DoH.
+// NewResolver creates a new resolver with the specified DoH upstream endpoints.
 func NewResolver(upstreams []string, timeout time.Duration) *Resolver {
 	if len(upstreams) == 0 {
 		upstreams = defaultUpstreams
@@ -38,7 +38,7 @@ func NewResolver(upstreams []string, timeout time.Duration) *Resolver {
 	}
 }
 
-// Query mengirim query wire DNS ke upstream DoH dan fallback ke upstream berikutnya jika gagal.
+// Query transmits a DNS wire message to upstream DoH providers, failing over sequentially if errors occur.
 func (r *Resolver) Query(ctx context.Context, queryData []byte) ([]byte, string, error) {
 	var lastErr error
 
@@ -59,19 +59,19 @@ func (r *Resolver) Query(ctx context.Context, queryData []byte) ([]byte, string,
 
 		if resp.StatusCode != http.StatusOK {
 			_ = resp.Body.Close()
-			lastErr = fmt.Errorf("upstream %s mengembalikan status %d", endpoint, resp.StatusCode)
+			lastErr = fmt.Errorf("upstream %s returned HTTP status %d", endpoint, resp.StatusCode)
 			continue
 		}
 
 		body, err := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if err != nil {
-			lastErr = fmt.Errorf("gagal membaca body %s: %w", endpoint, err)
+			lastErr = fmt.Errorf("failed to read response body from %s: %w", endpoint, err)
 			continue
 		}
 
 		if len(body) < 12 {
-			lastErr = fmt.Errorf("jawaban upstream %s terlalu pendek (<12 bytes)", endpoint)
+			lastErr = fmt.Errorf("upstream response from %s too short (<12 bytes)", endpoint)
 			continue
 		}
 
@@ -81,5 +81,5 @@ func (r *Resolver) Query(ctx context.Context, queryData []byte) ([]byte, string,
 	if lastErr != nil {
 		return nil, "", lastErr
 	}
-	return nil, "", errors.New("tidak ada upstream DoH yang tersedia")
+	return nil, "", errors.New("no upstream DoH endpoints available")
 }

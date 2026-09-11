@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// FakeStatsProvider memverifikasi bahwa interface StatsProvider dapat di-mock untuk testing non-root.
+// FakeStatsProvider verifies that the StatsProvider interface can be mocked for non-root testing.
 type FakeStatsProvider struct {
 	snapshot StatsSnapshot
 	err      error
@@ -61,12 +61,12 @@ func TestEngineCloseIdempotent(t *testing.T) {
 		t.Fatalf("first close failed: %v", err)
 	}
 
-	// Idempotent: close kedua kali tidak boleh error atau panic
+	// Idempotent: closing a second time must not error or panic
 	if err := eng.Close(); err != nil {
 		t.Fatalf("second close failed: %v", err)
 	}
 
-	// Stats setelah close harus mengembalikan error
+	// Stats after close must return an error
 	_, err := eng.Stats()
 	if err == nil {
 		t.Fatal("expected error when querying stats on closed engine, got nil")

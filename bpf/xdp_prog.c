@@ -30,7 +30,7 @@ struct {
   __uint(max_entries, 1);
 } synack_clamp_count SEC(".maps");
 
-// Helper matematika RFC 1624: Update Checksum 16-bit secara instan
+// RFC 1624 mathematical helper: Fast incremental 16-bit checksum update
 static inline void update_csum16(__u16 *csum, __u16 old_val, __u16 new_val) {
   __u32 sum = (~(*csum) & 0xffff) + (~old_val & 0xffff) + new_val;
   sum = (sum >> 16) + (sum & 0xffff);
@@ -39,7 +39,7 @@ static inline void update_csum16(__u16 *csum, __u16 old_val, __u16 new_val) {
 }
 
 //======================================
-// 1. INGRESS HOOK (XDP - Pintu Masuk)
+// 1. INGRESS HOOK (XDP - Entry Point)
 //======================================
 SEC("xdp")
 int xdp_router_func(struct xdp_md *ctx) {
@@ -77,7 +77,7 @@ int xdp_router_func(struct xdp_md *ctx) {
 }
 
 //=================================================
-// 2. EGRESS HOOK (TC - Pintu Keluar / DPI Guard)
+// 2. EGRESS HOOK (TC - Exit Point / DPI Guard)
 //=================================================
 SEC("tc")
 int tc_egress_func(struct __sk_buff *skb) {
@@ -102,17 +102,17 @@ int tc_egress_func(struct __sk_buff *skb) {
   if ((void *)tcp + sizeof(struct tcphdr) > data_end)
     return TC_ACT_OK;
 
-  // Periksa apakah menuju Port 443 (HTTPS)
+  // Check whether destined for Port 443 (HTTPS)
   if (bpf_ntohs(tcp->dest) == 443) {
-    // 1. Tarik 128 byte pertama ke linear buffer supaya payload TLS masuk ke skb->data
+    // 1. Pull first 128 bytes into linear buffer so TLS payload is accessible in skb->data
     if (bpf_skb_pull_data(skb, 128) < 0)
       return TC_ACT_OK;
 
-    // 2. WAJIB RE-EVALUASI pointer karena memori bisa berpindah setelah pull!
+    // 2. MUST re-evaluate pointers because packet memory may shift after pull!
     data = (void *)(long)skb->data;
     data_end = (void *)(long)skb->data_end;
     
-    // Re-validate boundary IP & TCP setelah refresh pointer 
+    // Re-validate IP & TCP boundaries after pointer refresh 
     eth = data;
     if ((void *)eth + sizeof(struct ethhdr) > data_end)
       return TC_ACT_OK;
@@ -125,7 +125,7 @@ int tc_egress_func(struct __sk_buff *skb) {
     if ((void *)tcp + sizeof(struct tcphdr) > data_end)
       return TC_ACT_OK;
 
-    // 3. Sekarang hitung payload TCP
+    // 3. Calculate TCP payload offset
     void *payload = (void *)tcp + (tcp->doff * 4);
 
     if ((void *)payload + 6 <= data_end) {
@@ -170,18 +170,18 @@ int tc_ingress_func(struct __sk_buff *skb) {
   if ((void *)tcp + sizeof(struct tcphdr) > data_end)
     return TC_ACT_OK;
 
-  // Tangkap balasan dari Port 443 yang memiliki flag SYN dan ACK
+  // Intercept reply from Port 443 with SYN and ACK flags set
   if (bpf_ntohs(tcp->source) == 443 && tcp->syn && tcp->ack) {
     __u16 old_win = tcp->window;
-    __u16 new_win = bpf_htons(2); // Paksa window jadi cuma 2 byte!
+    __u16 new_win = bpf_htons(2); // Clamp window size to 2 bytes
 
-    // Perbaiki checksum L4 TCP
+    // Update L4 TCP checksum incrementally
     update_csum16(&tcp->check, old_win, new_win);
 
-    // Timpa window di memori kernel
+    // Overwrite window in kernel memory
     tcp->window = new_win;
 
-    // Catat ke BPF Map
+    // Record into BPF Map
     __u32 key = 0;
     __u64 *val = bpf_map_lookup_elem(&synack_clamp_count, &key);
     if (val) {

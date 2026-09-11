@@ -23,7 +23,7 @@ const (
 	dnsmasqLeasePath = "/tmp/routerd-dnsmasq.leases"
 )
 
-// Config membawa konfigurasi untuk inisialisasi AP Controller
+// Config carries configuration for initializing the AP Controller.
 type Config struct {
 	ParentIface string
 	SSID        string
@@ -33,7 +33,7 @@ type Config struct {
 	APInterface string // Default "ap0"
 }
 
-// Controller mengelola lifecycle hostapd, dnsmasq, dan iptables Stealth NAT dengan rollback LIFO.
+// Controller manages the lifecycle of hostapd, dnsmasq, and iptables Stealth NAT with LIFO rollback.
 type Controller struct {
 	cfg        Config
 	mu         sync.Mutex
@@ -43,7 +43,7 @@ type Controller struct {
 	dnsmasqCmd *exec.Cmd
 }
 
-// NewController membuat instance AP Controller baru dengan parameter default.
+// NewController creates a new AP Controller instance with default parameters.
 func NewController(cfg Config) *Controller {
 	if cfg.GatewayIP == "" {
 		cfg.GatewayIP = defaultIP
@@ -70,25 +70,25 @@ func (c *Controller) rollback() {
 	c.cleanups = nil
 }
 
-// Start menjalankan Wi-Fi Hotspot, DHCP server, dan Stealth NAT dengan garansi atomik.
+// Start launches Wi-Fi Hotspot, DHCP server, and Stealth NAT with atomic rollback guarantees.
 func (c *Controller) Start() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.running {
-		return errors.New("AP Controller sudah berjalan")
+		return errors.New("AP Controller is already running")
 	}
 
-	log.Printf("HOTSPOT: Menyiapkan interface virtual [%s] di atas [%s]...", c.cfg.APInterface, c.cfg.ParentIface)
+	log.Printf("HOTSPOT: Setting up virtual interface [%s] on top of [%s]...", c.cfg.APInterface, c.cfg.ParentIface)
 
-	// 1. Bersihkan sisa ap0 lama jika ada
+	// 1. Clean up lingering ap0 if present
 	_ = exec.Command("iw", "dev", c.cfg.APInterface, "del").Run()
 
-	// 2. Deteksi channel interface induk
+	// 2. Detect channel of parent interface
 	ch, hwMode := c.getWifiChannel(c.cfg.ParentIface)
-	log.Printf("HOTSPOT: Sinkronisasi frekuensi radio -> Channel %d (Band %s)", ch, hwMode)
+	log.Printf("HOTSPOT: Radio frequency sync -> Channel %d (Band %s)", ch, hwMode)
 
-	// 3. Buat interface virtual ap0 dengan locally administered MAC
+	// 3. Create virtual interface ap0 with locally administered MAC
 	vmac := c.getVirtualMAC(c.cfg.ParentIface)
 	var cmdAdd *exec.Cmd
 	if vmac != "" {
@@ -99,20 +99,20 @@ func (c *Controller) Start() error {
 	if out, err := cmdAdd.CombinedOutput(); err != nil {
 		cmdFallback := exec.Command("iw", "dev", c.cfg.ParentIface, "interface", "add", c.cfg.APInterface, "type", "__ap")
 		if out2, err2 := cmdFallback.CombinedOutput(); err2 != nil {
-			return fmt.Errorf("gagal membuat virtual AP interface: %s / %s (%w)", string(out), string(out2), err2)
+			return fmt.Errorf("failed to create virtual AP interface: %s / %s (%w)", string(out), string(out2), err2)
 		}
 	}
 	c.addCleanup(func() {
 		_ = exec.Command("iw", "dev", c.cfg.APInterface, "del").Run()
 	})
 
-	// 4. Isolasi dari NetworkManager
+	// 4. Isolate from NetworkManager
 	_ = exec.Command("nmcli", "device", "set", c.cfg.APInterface, "managed", "no").Run()
 	c.addCleanup(func() {
 		_ = exec.Command("nmcli", "device", "set", c.cfg.APInterface, "managed", "yes").Run()
 	})
 
-	// 5. Tulis konfigurasi hostapd
+	// 5. Write hostapd configuration
 	confContent := fmt.Sprintf(`interface=%s
 driver=nl80211
 ssid=%s
@@ -130,18 +130,18 @@ rsn_pairwise=CCMP
 
 	if err := os.WriteFile(hostapdConf, []byte(confContent), 0600); err != nil {
 		c.rollback()
-		return fmt.Errorf("gagal menulis hostapd config: %w", err)
+		return fmt.Errorf("failed to write hostapd config: %w", err)
 	}
 	c.addCleanup(func() {
 		_ = os.Remove(hostapdConf)
 		_ = os.Remove(hostapdLogPath)
 	})
 
-	// 6. Jalankan hostapd
+	// 6. Launch hostapd
 	hostapdLog, err := os.OpenFile(hostapdLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		c.rollback()
-		return fmt.Errorf("gagal membuat file log hostapd: %w", err)
+		return fmt.Errorf("failed to create hostapd log file: %w", err)
 	}
 	defer hostapdLog.Close()
 
@@ -151,7 +151,7 @@ rsn_pairwise=CCMP
 
 	if err := c.hostapdCmd.Start(); err != nil {
 		c.rollback()
-		return fmt.Errorf("gagal menjalankan hostapd: %w", err)
+		return fmt.Errorf("failed to start hostapd: %w", err)
 	}
 	c.addCleanup(func() {
 		if c.hostapdCmd != nil && c.hostapdCmd.Process != nil {
@@ -160,19 +160,19 @@ rsn_pairwise=CCMP
 		}
 	})
 
-	// 7. Health-check hostapd
+	// 7. Hostapd health-check
 	time.Sleep(1 * time.Second)
 	if err := c.hostapdCmd.Process.Signal(syscall.Signal(0)); err != nil {
 		logData, _ := os.ReadFile(hostapdLogPath)
 		c.rollback()
-		return fmt.Errorf("hostapd CRASH saat inisialisasi driver/radio:\n%s", string(logData))
+		return fmt.Errorf("hostapd CRASHED during driver/radio initialization:\n%s", string(logData))
 	}
 
-	// 8. Assign IP Gateway ke ap0
+	// 8. Assign Gateway IP to ap0
 	_ = exec.Command("ip", "addr", "add", c.cfg.GatewayIP+"/24", "dev", c.cfg.APInterface).Run()
 	_ = exec.Command("ip", "link", "set", c.cfg.APInterface, "up").Run()
 
-	// 9. Jalankan dnsmasq
+	// 9. Launch dnsmasq
 	c.dnsmasqCmd = exec.Command("dnsmasq",
 		"--no-hosts",
 		"--keep-in-foreground",
@@ -187,7 +187,7 @@ rsn_pairwise=CCMP
 	)
 	if err := c.dnsmasqCmd.Start(); err != nil {
 		c.rollback()
-		return fmt.Errorf("gagal menjalankan dnsmasq: %w", err)
+		return fmt.Errorf("failed to start dnsmasq: %w", err)
 	}
 	c.addCleanup(func() {
 		if c.dnsmasqCmd != nil && c.dnsmasqCmd.Process != nil {
@@ -204,7 +204,7 @@ rsn_pairwise=CCMP
 		_ = exec.Command("sysctl", "-w", "net.ipv4.conf.all.route_localnet=0").Run()
 	})
 
-	// Redirection DNS: Port 53 -> 127.0.0.1:53
+	// DNS redirection: Port 53 -> 127.0.0.1:53
 	_ = exec.Command("iptables", "-t", "nat", "-I", "PREROUTING", "1", "-i", c.cfg.APInterface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:53").Run()
 	c.addCleanup(func() {
 		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", c.cfg.APInterface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:53").Run()
@@ -232,13 +232,13 @@ rsn_pairwise=CCMP
 	})
 
 	c.running = true
-	log.Printf("SUCCESS: Wi-Fi Hotspot [%s] AKTIF di [%s]! (Password: %s)", c.cfg.SSID, c.cfg.APInterface, c.cfg.Password)
-	log.Printf("SUCCESS: DHCP Server [10.42.0.10 - 10.42.0.50] siap melayani HP/Client")
-	log.Printf("SUCCESS: Stealth NAT Active -> Semua DNS client disedot ke DoH 127.0.0.1:53")
+	log.Printf("SUCCESS: Wi-Fi Hotspot [%s] ACTIVE on [%s]! (Password: %s)", c.cfg.SSID, c.cfg.APInterface, c.cfg.Password)
+	log.Printf("SUCCESS: DHCP Server [10.42.0.10 - 10.42.0.50] ready to serve clients")
+	log.Printf("SUCCESS: Stealth NAT Active -> All client DNS traffic redirected to DoH 127.0.0.1:53")
 	return nil
 }
 
-// GetConnectedClients membaca daftar client dari lease DHCP dan radio Wi-Fi menggunakan pure parsers.
+// GetConnectedClients reads connected clients from DHCP leases and Wi-Fi radio using pure parsers.
 func (c *Controller) GetConnectedClients() ([]ConnectedClient, error) {
 	leases := make(map[string]ConnectedClient)
 	if data, err := os.ReadFile(dnsmasqLeasePath); err == nil {
@@ -253,7 +253,7 @@ func (c *Controller) GetConnectedClients() ([]ConnectedClient, error) {
 	return MergeClientStats(leases, stats), nil
 }
 
-// Close mematikan hostapd, dnsmasq, dan membersihkan seluruh aturan iptables secara LIFO.
+// Close stops hostapd, dnsmasq, and removes all iptables rules in LIFO order.
 func (c *Controller) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -263,9 +263,9 @@ func (c *Controller) Close() error {
 	}
 	c.running = false
 
-	log.Println("HOTSPOT: Mematikan Wi-Fi Hotspot dan membersihkan NAT secara LIFO...")
+	log.Println("HOTSPOT: Stopping Wi-Fi Hotspot and cleaning up NAT in LIFO order...")
 	c.rollback()
-	log.Println("SUCCESS: Hotspot & NAT berhasil dibersihkan dengan aman!")
+	log.Println("SUCCESS: Hotspot & NAT cleaned up safely!")
 	return nil
 }
 

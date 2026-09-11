@@ -13,10 +13,10 @@ const (
 	defaultTTL = 60 * time.Second
 )
 
-// ExtractQuestion mengurai nama domain (QName) dan tipe query (QType) dari payload DNS wire RFC 1035.
+// ExtractQuestion extracts the domain name (QName) and query type (QType) from an RFC 1035 DNS wire payload.
 func ExtractQuestion(data []byte) (string, uint16, error) {
 	if len(data) < 12 {
-		return "", 0, errors.New("paket DNS terlalu pendek (<12 bytes)")
+		return "", 0, errors.New("DNS packet too short (<12 bytes)")
 	}
 
 	offset := 12
@@ -28,19 +28,19 @@ func ExtractQuestion(data []byte) (string, uint16, error) {
 			offset++
 			break
 		}
-		if length >= 192 { // Kompresi pointer 0xC0
+		if length >= 192 { // Compression pointer 0xC0
 			offset += 2
 			break
 		}
 		if length > 63 || offset+1+length > len(data) {
-			return "", 0, errors.New("format label DNS tidak valid")
+			return "", 0, errors.New("invalid DNS label format")
 		}
 		labels = append(labels, string(data[offset+1:offset+1+length]))
 		offset += 1 + length
 	}
 
 	if offset+4 > len(data) {
-		return "", 0, errors.New("tidak ada QType/QClass di Question")
+		return "", 0, errors.New("missing QType/QClass in Question section")
 	}
 
 	qtype := binary.BigEndian.Uint16(data[offset : offset+2])
@@ -52,7 +52,7 @@ func ExtractQuestion(data []byte) (string, uint16, error) {
 	return domain, qtype, nil
 }
 
-// ExtractTTL membaca nilai TTL minimum dari section Answer pada DNS response.
+// ExtractTTL reads the minimum TTL value from the Answer section in a DNS response.
 func ExtractTTL(resp []byte) time.Duration {
 	if len(resp) < 12 {
 		return defaultTTL
@@ -66,7 +66,7 @@ func ExtractTTL(resp []byte) time.Duration {
 	qdcount := binary.BigEndian.Uint16(resp[4:6])
 	offset := 12
 
-	// Lewati semua record di Question section
+	// Skip all records in the Question section
 	for i := 0; i < int(qdcount); i++ {
 		for offset < len(resp) {
 			length := int(resp[offset])
@@ -74,7 +74,7 @@ func ExtractTTL(resp []byte) time.Duration {
 				offset++
 				break
 			}
-			if length >= 192 { // 0xC0 pointer kompresi
+			if length >= 192 { // 0xC0 compression pointer
 				offset += 2
 				break
 			}
@@ -86,12 +86,12 @@ func ExtractTTL(resp []byte) time.Duration {
 		}
 	}
 
-	// Baca Answer Section pertama
+	// Read first Answer section record
 	if offset >= len(resp) {
 		return defaultTTL
 	}
 
-	// Lewati NAME di Answer (bisa pointer atau label)
+	// Skip NAME in Answer (compression pointer or labels)
 	if resp[offset] >= 192 {
 		offset += 2
 	} else {
@@ -110,7 +110,7 @@ func ExtractTTL(resp []byte) time.Duration {
 		return defaultTTL
 	}
 
-	offset += 4 // Lewati TYPE & CLASS
+	offset += 4 // Skip TYPE & CLASS
 	rawTTL := binary.BigEndian.Uint32(resp[offset : offset+4])
 	ttl := time.Duration(rawTTL) * time.Second
 

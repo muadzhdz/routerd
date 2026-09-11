@@ -40,7 +40,7 @@ func TestCollectorSamplingAndPeaks(t *testing.T) {
 
 	col := NewCollector(cfg)
 
-	// Step 1: Simulasi lonjakan trafik
+	// Step 1: Simulate traffic surge
 	currentRx = 10000 + 20480 // Delta +20KB
 	currentTx = 5000 + 10240  // Delta +10KB
 	mockEngine.snap.ClampedPackets = 125 // Delta +25
@@ -63,12 +63,12 @@ func TestCollectorSamplingAndPeaks(t *testing.T) {
 		t.Errorf("expected PeakClampRate=25, got %d", snap1.PeakClampRate)
 	}
 
-	// Cek ring buffer ujung terakhir (offset 47)
+	// Verify latest ring buffer entry (offset 47)
 	if snap1.WAN.RxHistory[HistorySize-1] != 20 { // 20480 / 1024 = 20 KB/s
 		t.Errorf("expected last RxHistory=20, got %d", snap1.WAN.RxHistory[HistorySize-1])
 	}
 
-	// Step 2: Trafik melambat, pastikan Peak tetap dipertahankan
+	// Step 2: Traffic slows down, verify Peak is preserved
 	currentRx += 5120 // Delta +5KB
 	currentTx += 2048 // Delta +2KB
 	mockEngine.snap.ClampedPackets += 5 // Delta +5

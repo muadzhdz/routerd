@@ -6,7 +6,7 @@ import (
 )
 
 func TestServerLifecycle(t *testing.T) {
-	// Bind ke port ephemeral di localhost
+	// Bind to ephemeral port on localhost
 	srv, err := NewServer(ServerConfig{
 		ListenAddr:   "127.0.0.1:0",
 		QueryTimeout: 1 * time.Second,
@@ -20,7 +20,7 @@ func TestServerLifecycle(t *testing.T) {
 		t.Fatalf("failed to start server: %v", err)
 	}
 
-	// Pastikan events channel aktif
+	// Verify events channel is non-nil
 	events := srv.Events()
 	if events == nil {
 		t.Fatal("expected non-nil events channel")

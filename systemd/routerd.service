@@ -1,0 +1,26 @@
+[Unit]
+Description=routerd - eBPF Stealth Router, DNS Resolver and Hotspot Daemon
+Documentation=https://github.com/muadzhdz/routerd
+After=network.target network-online.target systemd-resolved.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Binary location after installation via 'sudo cp routerd /usr/local/bin/'
+ExecStart=/usr/local/bin/routerd -headless -hotspot
+Restart=on-failure
+RestartSec=5s
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15s
+
+# Linux Least-Privilege Capabilities
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW CAP_SYS_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW CAP_SYS_ADMIN
+LimitMEMLOCK=infinity
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

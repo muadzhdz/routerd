@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// ParseNetDev membaca RX dan TX byte dari teks berformat /proc/net/dev untuk interface tertentu.
-// Format baris /proc/net/dev di Linux:
+// ParseNetDev extracts RX and TX bytes from /proc/net/dev formatted text for a specific interface.
+// Linux /proc/net/dev line format:
 // <iface>: <rx_bytes> <rx_packets> <rx_errs> <rx_drop> <rx_fifo> <rx_frame> <rx_compressed> <rx_multicast> <tx_bytes> <tx_packets> ...
 func ParseNetDev(content string, iface string) (rx uint64, tx uint64) {
 	if strings.TrimSpace(content) == "" || iface == "" {
@@ -31,7 +31,7 @@ func ParseNetDev(content string, iface string) (rx uint64, tx uint64) {
 	return 0, 0
 }
 
-// ReadNetDev membaca file virtual /proc/net/dev dari kernel Linux.
+// ReadNetDev reads the Linux kernel virtual file /proc/net/dev.
 func ReadNetDev(iface string) (rx uint64, tx uint64) {
 	data, err := os.ReadFile("/proc/net/dev")
 	if err != nil {

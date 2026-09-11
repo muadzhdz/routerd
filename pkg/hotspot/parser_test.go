@@ -97,7 +97,7 @@ func TestMergeClientStats(t *testing.T) {
 		t.Fatalf("expected 2 merged clients, got %d", len(merged))
 	}
 
-	// Cek OPPO (ter-merge dari DHCP + station dump)
+	// Check OPPO (merged from DHCP + station dump)
 	foundOppo := false
 	foundDynamic := false
 	for _, c := range merged {

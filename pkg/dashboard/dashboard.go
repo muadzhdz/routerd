@@ -16,7 +16,7 @@ import (
 
 var sparkBlocks = []rune{' ', ' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
-// Config membawa parameter awal untuk inisialisasi dashboard
+// Config carries initial parameters for dashboard initialization.
 type Config struct {
 	WANIface      string
 	WANIP         string
@@ -27,7 +27,7 @@ type Config struct {
 	ShutdownFunc  func()
 }
 
-// Model merepresentasikan state penuh dashboard TUI (The Elm Architecture)
+// Model represents the complete state of the TUI dashboard (The Elm Architecture).
 type Model struct {
 	cfg       Config
 	collector *telemetry.Collector
@@ -110,7 +110,7 @@ func waitForDNSEvent(ch <-chan dns.DNSEvent) tea.Cmd {
 	}
 }
 
-// NewModel membuat instance baru dari Model dashboard
+// NewModel creates a new instance of the dashboard Model.
 func NewModel(cfg Config) Model {
 	histLen := 50
 	col := telemetry.NewCollector(telemetry.Config{
@@ -415,7 +415,7 @@ func formatShortScale(b uint64) string {
 	}
 }
 
-// makeGaugeBar menghasilkan progress bar btop: [██████░░░░░░]
+// makeGaugeBar generates a btop progress bar: [██████░░░░░░]
 func makeGaugeBar(val, max int, width int) string {
 	if width <= 2 {
 		return ""
@@ -436,7 +436,7 @@ func makeGaugeBar(val, max int, width int) string {
 	return "[" + strings.Repeat("█", filled) + strings.Repeat("░", empty) + "]"
 }
 
-// makeSolidMeter menghasilkan bar meter kompak beresolusi tinggi dengan karakter ▰ dan ▱
+// makeSolidMeter generates a compact high-resolution meter bar using ▰ and ▱ characters.
 func makeSolidMeter(val, max int, width int) string {
 	if width <= 0 {
 		return ""
@@ -456,7 +456,7 @@ func makeSolidMeter(val, max int, width int) string {
 	return strings.Repeat("▰", filled) + strings.Repeat("▱", empty)
 }
 
-// renderSparkline mengubah slice nilai menjadi grafik Unicode block
+// renderSparkline transforms a value slice into a Unicode block graph.
 func renderSparkline(values []int, width int) string {
 	if len(values) == 0 || width <= 0 {
 		return ""
@@ -490,7 +490,7 @@ func renderSparkline(values []int, width int) string {
 	return sb.String()
 }
 
-// renderBtopBox merender panel kotak dengan gaya btop yang menyatu di border
+// renderBtopBox renders a box panel in btop style seamlessly integrated into borders.
 func renderBtopBox(width, height int, tabs []string, centerTitle string, rightTitle string, contentLines []string) string {
 	if width < 12 || height < 3 {
 		return ""
@@ -608,7 +608,7 @@ var brailleMap = [4][2]int{
 	{0x40, 0x80},
 }
 
-// renderBidirectionalBraille menghasilkan baris-baris grafik Braille resolusi tinggi (RX/Clamp ke atas, TX/DNS ke bawah)
+// renderBidirectionalBraille generates high-resolution Braille graph lines (RX/Clamp upwards, TX/DNS downwards).
 func renderBidirectionalBraille(width, height int, topData, botData []int, maxTop, maxBot int) []string {
 	if maxTop <= 0 {
 		maxTop = 10
@@ -705,7 +705,7 @@ func renderBidirectionalBraille(width, height int, topData, botData []int, maxTo
 	return lines
 }
 
-// renderEbpfBox merender panel eBPF & DPI Scrambler dengan format grafik Braille resolusi tinggi dan layout khusus
+// renderEbpfBox renders the eBPF & DPI Scrambler panel with high-resolution Braille waveforms and kernel telemetry.
 func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wanIface string,
 	clampRate, peakClampRate int, totalClamp uint64, clampHistory []int,
 	dnsRate, peakDNSRate int, totalDNS uint64, avgDNSLatency time.Duration, dnsHistory []int,
@@ -717,7 +717,7 @@ func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wan
 		return renderBtopBox(width, height, []string{"¹ebpf-tcx", "dpi-scrambler"}, currTime, "", nil)
 	}
 
-	// 1. Split horizontal: 50% untuk Braille Waveform, 50% untuk Kernel Telemetry Matrix
+	// 1. Horizontal split: 50% for Braille Waveform, 50% for Kernel Telemetry Matrix
 	graphSectionW := int(float64(innerW) * 0.50)
 	matrixW := innerW - graphSectionW - 3
 	if matrixW < 36 {
@@ -742,7 +742,7 @@ func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wan
 
 	brailleLines := renderBidirectionalBraille(graphW, innerH, clampHistory, dnsHistory, maxClamp, maxDNS)
 
-	// 2. Format Kernel Telemetry Matrix (Kanan) - High-tech, Clean, No Ugly Dots
+	// 2. Format Kernel Telemetry Matrix (Right side) - High-tech, Clean, No Ugly Dots
 	clampMeter := makeSolidMeter(clampRate, 30, 8)
 	dnsMeter := makeSolidMeter(dnsRate, 30, 8)
 	helloMeter := makeSolidMeter(int(totalHello%30), 30, 8)
@@ -777,7 +777,7 @@ func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wan
 
 	var contentLines []string
 	for r := 0; r < innerH; r++ {
-		// Kiri: Scale + Braille Waveform
+		// Left side: Scale + Braille Waveform
 		scaleStr := "    "
 		if r == 0 {
 			scaleStr = fmt.Sprintf("%-4s", fmt.Sprintf("%dp", maxClamp))
@@ -792,7 +792,7 @@ func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wan
 			leftSide += strings.Repeat(" ", padL)
 		}
 
-		// Kanan: Centered Kernel Matrix line
+		// Right side: Centered Kernel Matrix line
 		mStr := ""
 		lineIdx := r - matrixPadTop
 		if lineIdx >= 0 && lineIdx < matrixLen {
@@ -812,7 +812,7 @@ func renderEbpfBox(width, height int, currTime string, uptime time.Duration, wan
 	return renderBtopBox(width, height, topTabs, currTime, topRight, contentLines)
 }
 
-// renderBtopNetBox merender box network dengan dual waveform Braille dan floating legend box persis screenshot
+// renderBtopNetBox renders the network box with dual Braille waveforms and floating legend box matching btop layout.
 func renderBtopNetBox(width, height int, modeLabel, ifaceName, ipStr string, rxRate, txRate, rxPeak, txPeak, totalRx, totalTx uint64, rxHist, txHist []int) string {
 	innerW := width - 4
 	innerH := height - 2
@@ -821,7 +821,7 @@ func renderBtopNetBox(width, height int, modeLabel, ifaceName, ipStr string, rxR
 		return renderBtopBox(width, height, tabs, "", ifaceName, nil)
 	}
 
-	// 1. Desain Floating Legend Box (Lebar 33 karakter, persis screenshot btop)
+	// 1. Floating Legend Box Design (33 characters wide, matching btop layout)
 	legendW := 33
 	innerLegendW := legendW - 4
 	topTitle := "download (" + modeLabel + ")"
@@ -850,14 +850,14 @@ func renderBtopNetBox(width, height int, modeLabel, ifaceName, ipStr string, rxR
 		botBorder,
 	}
 
-	// 2. Sisa lebar untuk Waveform Graph (scaleW=4, space=1, graphW, space=1, legendW=33 -> scaleW+1+graphW+1+legendW = innerW)
-	scaleW := 4 // untuk label misal "10K "
+	// 2. Remaining width for Waveform Graph (scaleW=4, space=1, graphW, space=1, legendW=33 -> scaleW+1+graphW+1+legendW = innerW)
+	scaleW := 4 // scale label e.g. "10K "
 	graphW := innerW - legendW - scaleW - 2
 	if graphW < 4 {
 		graphW = 4
 	}
 
-	// 3. Bangun baris-baris grafiknya dengan Braille Canvas
+	// 3. Build graph rows with Braille Canvas
 	maxRx := int(rxPeak / 1024)
 	if maxRx <= 0 {
 		maxRx = 10
@@ -876,7 +876,7 @@ func renderBtopNetBox(width, height int, modeLabel, ifaceName, ipStr string, rxR
 	}
 
 	for r := 0; r < innerH; r++ {
-		// Scale text di sebelah kiri (10K di atas dan 10K di bawah persis screenshot btop)
+		// Scale text on the left side (10K on top and 10K at bottom matching btop layout)
 		scaleStr := "    "
 		if r == 0 {
 			scaleStr = fmt.Sprintf("%-4s", formatShortScale(rxPeak))
@@ -886,7 +886,7 @@ func renderBtopNetBox(width, height int, modeLabel, ifaceName, ipStr string, rxR
 
 		graphStr := brailleLines[r]
 
-		// Floating legend di sebelah kanan
+		// Floating legend on the right side
 		legStr := strings.Repeat(" ", legendW)
 		if r >= legendStart && r < legendStart+len(legend) {
 			legStr = legend[r-legendStart]
@@ -927,7 +927,7 @@ func formatCardBot(width int) string {
 	return "└" + strings.Repeat("─", max(0, width-2)) + "┘"
 }
 
-// renderHotspotBox merender Box 2 [²hotspot] [stealth-nat] dengan arsitektur dual-card dan pipeline routing visual
+// renderHotspotBox renders Box 2 [²hotspot] [stealth-nat] with dual-card architecture and visual routing pipeline.
 func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 	innerW := width - 4
 	innerH := height - 2
@@ -942,7 +942,7 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 
 	leaseMeter := makeSolidMeter(clientsCount, 41, 8)
 
-	// Jika lebar mencukupi (>= 50 karakter), gunakan arsitektur dual-card yang centered
+	// If width is sufficient (>= 50 characters), use centered dual-card architecture
 	if innerW >= 50 && innerH >= 7 {
 		c1W := (innerW - 1) / 2
 		c2W := innerW - 1 - c1W
@@ -1009,7 +1009,7 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 		return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", hotspotStatus, merged)
 	}
 
-	// Layout responsif bertingkat untuk lebar terbatas dengan vertikal centering
+	// Responsive tiered layout for constrained widths with vertical centering
 	singleLines := []string{
 		"── Wi-Fi AP [ap0: 10.42.0.1/24] ───────────────────────",
 		fmt.Sprintf("SSID: %s  ·  5180 MHz (Ch 36 / 80 MHz)", cfg.SSID),
@@ -1035,7 +1035,7 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 	return renderBtopBox(width, height, []string{"²hotspot", "stealth-nat"}, "", hotspotStatus, centeredSingle)
 }
 
-// View merender full-screen grid persis seperti layout btop
+// View renders full-screen grid matching btop layout.
 func (m Model) View() string {
 	if m.quitting {
 		return "Shutting down routerd cleanly...\n"
@@ -1067,7 +1067,7 @@ func (m Model) View() string {
 		m.totalHelloCount)
 
 	// ==========================================
-	// 2. BOTTOM SECTION: GRID DUA KOLOM
+	// 2. BOTTOM SECTION: TWO-COLUMN GRID
 	// ==========================================
 	bottomH := totalH - topHeight - 1
 	leftW := int(float64(totalW) * 0.44)
@@ -1076,11 +1076,11 @@ func (m Model) View() string {
 	}
 	rightW := totalW - leftW
 
-	// --- 2A. BOX 2: [²hotspot] [stealth-nat] (Kiri Atas) ---
+	// --- 2A. BOX 2: [²hotspot] [stealth-nat] (Top Left) ---
 	box2H := int(float64(bottomH) * 0.50)
 	box2Str := renderHotspotBox(leftW, box2H, m.cfg, len(m.clients))
 
-	// --- 2B. BOX 3: [³net] (Kiri Bawah - Otentik btop Net Panel WAN / LAN) ---
+	// --- 2B. BOX 3: [³net] (Bottom Left - Authentic btop Net Panel WAN / LAN) ---
 	box3H := bottomH - box2H
 	var netModeLabel string
 	var netIface string
@@ -1122,14 +1122,14 @@ func (m Model) View() string {
 
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, box2Str, box3Str)
 
-	// --- 2C. BOX 4: [⁴stations & inspector] (Kolom Kanan, Full Height) ---
+	// --- 2C. BOX 4: [⁴stations & inspector] (Right Column, Full Height) ---
 	box4Tabs := []string{"⁴stations & inspector"}
 	box4Right := fmt.Sprintf("Clients: %d", len(m.clients))
 
 	var box4Lines []string
 	box4InnerW := rightW - 4
 
-	// Header Tabel Client (adaptif dengan lebar kolom)
+	// Client Table Header (adaptive to column width)
 	hostW := 16
 	if box4InnerW < 72 {
 		hostW = 12
@@ -1139,7 +1139,7 @@ func (m Model) View() string {
 	box4Lines = append(box4Lines, headerLine)
 	box4Lines = append(box4Lines, strings.Repeat("─", box4InnerW))
 
-	// Baris Client dengan seleksi panah dan scrolling
+	// Client rows with arrow selection and scrolling
 	maxClientRows := 5
 	if len(m.clients) == 0 {
 		box4Lines = append(box4Lines, "  No active wireless stations connected yet.")
@@ -1189,10 +1189,10 @@ func (m Model) View() string {
 		}
 	}
 
-	// Pembatas ke Live Feed
+	// Separator to Live Feed
 	box4Lines = append(box4Lines, "")
 
-	// Filter logs jika ada filter client aktif
+	// Filter logs if client IP filter is active
 	var displayLogs []string
 	if m.filterClientIP != "" {
 		for _, l := range m.logs {
@@ -1207,7 +1207,7 @@ func (m Model) View() string {
 		displayLogs = m.logs
 	}
 
-	// Clamp selectedLogIdx ke batas displayLogs
+	// Clamp selectedLogIdx to displayLogs boundaries
 	if m.selectedLogIdx < 0 {
 		m.selectedLogIdx = 0
 	}
@@ -1234,10 +1234,10 @@ func (m Model) View() string {
 	box4Lines = append(box4Lines, filterLabel)
 	box4Lines = append(box4Lines, strings.Repeat("─", box4InnerW))
 
-	// Live Logs dengan SELECTOR & SCROLLING VIEWPORT
+	// Live Logs with SELECTOR & SCROLLING VIEWPORT
 	remainingLogRows := (box4H_rows(bottomH)) - len(box4Lines)
 	if remainingLogRows > 0 {
-		// Pastikan m.selectedLogIdx selalu terlihat di viewport
+		// Ensure m.selectedLogIdx is always visible in viewport
 		if m.selectedLogIdx < m.logViewportStart {
 			m.logViewportStart = m.selectedLogIdx
 		}
@@ -1275,7 +1275,7 @@ func (m Model) View() string {
 
 	box4Str := renderBtopBox(rightW, bottomH, box4Tabs, "", box4Right, box4Lines)
 
-	// Gabungkan Kolom Kiri dan Kanan
+	// Join Left and Right Columns
 	bottomSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, box4Str)
 
 	// ==========================================

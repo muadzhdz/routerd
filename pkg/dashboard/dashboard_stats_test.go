@@ -32,7 +32,7 @@ func TestDashboardStatsProviderIntegration(t *testing.T) {
 
 	model := NewModel(cfg)
 
-	// Kirim tickMsg untuk memicu polling stats
+	// Send tickMsg to trigger stats polling
 	newModel, _ := model.Update(tickMsg(time.Now()))
 	m := newModel.(Model)
 

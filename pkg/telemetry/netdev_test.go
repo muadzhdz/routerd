@@ -12,7 +12,7 @@ wlp2s0: 987654321  54321    0    0    0     0          0         0 123456789  43
 `
 
 func TestParseNetDev(t *testing.T) {
-	// 1. Uji interface wlp2s0
+	// 1. Test wlp2s0 interface
 	rx, tx := ParseNetDev(sampleProcNetDev, "wlp2s0")
 	if rx != 987654321 {
 		t.Errorf("expected wlp2s0 rx=987654321, got %d", rx)
@@ -21,7 +21,7 @@ func TestParseNetDev(t *testing.T) {
 		t.Errorf("expected wlp2s0 tx=123456789, got %d", tx)
 	}
 
-	// 2. Uji interface ap0
+	// 2. Test ap0 interface
 	rxAp, txAp := ParseNetDev(sampleProcNetDev, "ap0")
 	if rxAp != 4567890 {
 		t.Errorf("expected ap0 rx=4567890, got %d", rxAp)
@@ -30,13 +30,13 @@ func TestParseNetDev(t *testing.T) {
 		t.Errorf("expected ap0 tx=9876543, got %d", txAp)
 	}
 
-	// 3. Uji interface yang tidak ada
+	// 3. Test non-existent interface
 	rxNone, txNone := ParseNetDev(sampleProcNetDev, "eth99")
 	if rxNone != 0 || txNone != 0 {
 		t.Errorf("expected 0 for missing iface, got rx=%d, tx=%d", rxNone, txNone)
 	}
 
-	// 4. Uji input kosong
+	// 4. Test empty input
 	rxEmpty, txEmpty := ParseNetDev("", "wlp2s0")
 	if rxEmpty != 0 || txEmpty != 0 {
 		t.Errorf("expected 0 for empty content, got rx=%d, tx=%d", rxEmpty, txEmpty)

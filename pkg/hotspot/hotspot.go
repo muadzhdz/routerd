@@ -7,7 +7,7 @@ var (
 	defaultCtrlMu sync.Mutex
 )
 
-// ConnectedClient merepresentasikan metadata perangkat yang terhubung ke hotspot.
+// ConnectedClient represents metadata for a device connected to the hotspot.
 type ConnectedClient struct {
 	MAC       string
 	IP        string
@@ -16,7 +16,7 @@ type ConnectedClient struct {
 	TxBitrate string
 }
 
-// StartHotspot adalah adapter backward-compatible untuk menyalakan hotspot via default Controller.
+// StartHotspot is a backward-compatible adapter to start the hotspot via the default Controller.
 func StartHotspot(ifaceName, ssid, password string) error {
 	defaultCtrlMu.Lock()
 	defer defaultCtrlMu.Unlock()
@@ -29,7 +29,7 @@ func StartHotspot(ifaceName, ssid, password string) error {
 	return defaultCtrl.Start()
 }
 
-// StopHotspot adalah adapter backward-compatible untuk mematikan hotspot default Controller.
+// StopHotspot is a backward-compatible adapter to stop the default Controller hotspot.
 func StopHotspot() {
 	defaultCtrlMu.Lock()
 	defer defaultCtrlMu.Unlock()
@@ -40,7 +40,7 @@ func StopHotspot() {
 	}
 }
 
-// GetConnectedClients membaca daftar client yang terhubung via default Controller atau file leases.
+// GetConnectedClients retrieves the list of connected clients via the default Controller or lease file.
 func GetConnectedClients() ([]ConnectedClient, error) {
 	defaultCtrlMu.Lock()
 	ctrl := defaultCtrl

@@ -11,12 +11,12 @@ func TestControllerCloseIdempotent(t *testing.T) {
 		Password:    "password123",
 	})
 
-	// Close saat belum start harus aman (no-op)
+	// Close on unstarted controller must be safe (no-op)
 	if err := ctrl.Close(); err != nil {
 		t.Fatalf("close on unstarted controller failed: %v", err)
 	}
 
-	// Simulasi cleanup terdaftar
+	// Simulate registered cleanup
 	cleaned := false
 	ctrl.addCleanup(func() {
 		cleaned = true
@@ -30,7 +30,7 @@ func TestControllerCloseIdempotent(t *testing.T) {
 		t.Fatal("expected cleanup function to be executed during Close")
 	}
 
-	// Idempotent: Close kedua kali tidak boleh error
+	// Idempotent: Second close must not error
 	if err := ctrl.Close(); err != nil {
 		t.Fatalf("second close failed: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestControllerLIFORollbackOrder(t *testing.T) {
 
 	ctrl.rollback()
 
-	// Harus dieksekusi LIFO: 3, 2, 1
+	// Must be executed in LIFO order: 3, 2, 1
 	if len(executionOrder) != 3 {
 		t.Fatalf("expected 3 cleanups executed, got %d", len(executionOrder))
 	}

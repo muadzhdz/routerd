@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// buildMockQuery membangun paket DNS wire format sederhana untuk testing
+// buildMockQuery constructs a simple RFC 1035 DNS wire query for testing
 func buildMockQuery(domain string, qtype uint16, tid uint16) []byte {
 	buf := make([]byte, 12)
 	binary.BigEndian.PutUint16(buf[0:2], tid)
@@ -33,16 +33,16 @@ func buildMockQuery(domain string, qtype uint16, tid uint16) []byte {
 	return buf
 }
 
-// buildMockResponse membangun DNS response dengan Answer section dan TTL tertentu
+// buildMockResponse constructs an RFC 1035 DNS response with an Answer section and specified TTL
 func buildMockResponse(domain string, qtype uint16, tid uint16, ttl uint32) []byte {
 	query := buildMockQuery(domain, qtype, tid)
-	// Set QR=1 di flags (response)
+	// Set QR=1 in flags (response)
 	binary.BigEndian.PutUint16(query[2:4], 0x8180)
 	// Set ANCOUNT = 1
 	binary.BigEndian.PutUint16(query[6:8], 1)
 
-	// Tambahkan 1 Resource Record di Answer section:
-	// Pointer kompresi ke offset 12 (0xC00C)
+	// Add 1 Resource Record to Answer section:
+	// Compression pointer to offset 12 (0xC00C)
 	ans := []byte{0xC0, 0x0C}
 
 	rest := make([]byte, 14)
