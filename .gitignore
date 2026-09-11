@@ -3,6 +3,8 @@ routerd
 routerd-engine
 *.o
 !bpf_*.o
+routerd-*.tar.gz
+routerd-*-checksums.txt
 
 # Environment & credentials
 *.conf

@@ -108,4 +108,4 @@ uninstall:
 
 clean:
 	@echo "==> Cleaning build artifacts..."
-	rm -f $(BIN)
+	rm -f $(BIN) routerd-*.tar.gz routerd-*-checksums.txt
