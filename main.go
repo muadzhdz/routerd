@@ -51,9 +51,17 @@ func main() {
 	log.Printf("SUCCESS: System DNS [%s] dialihkan ke 127.0.0.1 (DoH Cloudflare)!", iface.Name)
 
 	// 3. Jika flag -hotspot aktif: Nyalakan Wi-Fi Hotspot & Stealth NAT
+	var hotspotCtrl *hotspot.Controller
 	if *hotspotFlag {
-		if err := hotspot.StartHotspot(iface.Name, *ssidFlag, *passFlag); err != nil {
+		hotspotCtrl = hotspot.NewController(hotspot.Config{
+			ParentIface: iface.Name,
+			SSID:        *ssidFlag,
+			Password:    *passFlag,
+		})
+		if err := hotspotCtrl.Start(); err != nil {
 			log.Printf("Peringatan Hotspot: %v", err)
+		} else {
+			defer hotspotCtrl.Close()
 		}
 	}
 

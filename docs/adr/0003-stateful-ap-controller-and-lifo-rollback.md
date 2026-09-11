@@ -1,0 +1,3 @@
+# Encapsulate Hotspot and Stealth NAT in Stateful AP Controller with LIFO Rollback
+
+We encapsulate Wi-Fi Access Point creation, DHCP server lifecycle, and iptables Stealth NAT rules inside a stateful `pkg/hotspot.Controller`. Previously, mutable package globals and a monolithic 10-step script left dangling iptables rules and zombie processes upon partial setup failures, and coupled client discovery to OS commands preventing automated tests. The Controller introduces a LIFO cleanup stack guaranteeing atomic rollback on error, and isolates DHCP lease and 802.11 station parsing into pure functions for non-root unit testing.

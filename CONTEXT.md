@@ -31,3 +31,7 @@ _Avoid_: DNS Proxy, Forwarder
 **Wire Codec**:
 Logic operating directly on raw RFC 1035 octet streams without external third-party AST libraries.
 _Avoid_: Packet Parser, DNS Unmarshaler
+
+**AP Controller**:
+The subsystem orchestrating virtual Wi-Fi interface creation (ap0), hostapd 802.11 daemon, dnsmasq DHCP, and iptables Stealth NAT rules with deterministic LIFO rollback guarantees.
+_Avoid_: Hotspot Manager, Wi-Fi Script
