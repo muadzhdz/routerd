@@ -1,0 +1,23 @@
+# /etc/routerd/routerd.conf
+# routerd configuration file
+
+# Target WAN network interface (leave 'auto' for default route auto-detection)
+WAN_IFACE=auto
+
+# Enable Wi-Fi Hotspot & Stealth NAT Router (true / false)
+HOTSPOT=true
+
+# Wi-Fi Hotspot SSID
+SSID=routerd
+
+# Wi-Fi Hotspot WPA2 Passphrase (minimum 8 characters)
+PASSWORD=kopi-hitam123
+
+# Upstream DNS servers for stealth DoH fallback (comma-separated IP list)
+UPSTREAMS=1.1.1.1, 8.8.8.8
+
+# In-Memory DNS Ad & Malware Blocker (true / false)
+BLOCK_ADS=true
+
+# Path to ad/malware domain blocklist file
+BLOCKLIST_FILE=/etc/routerd/blocklist.txt

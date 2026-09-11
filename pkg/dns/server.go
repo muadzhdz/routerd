@@ -20,17 +20,20 @@ type DNSEvent struct {
 
 // ServerConfig stores configuration parameters for the DNS Resolver Server.
 type ServerConfig struct {
-	ListenAddr   string
-	Upstreams    []string
-	QueryTimeout time.Duration
-	CacheEntries int
+	ListenAddr    string
+	Upstreams     []string
+	QueryTimeout  time.Duration
+	CacheEntries  int
+	BlockAds      bool
+	BlocklistPath string
 }
 
-// Server manages the UDP listener socket, cache, and upstream DoH resolution.
+// Server manages the UDP listener socket, cache, ad filter, and upstream DoH resolution.
 type Server struct {
 	cfg       ServerConfig
 	pc        net.PacketConn
 	cache     *Cache
+	filter    *Filter
 	resolver  *Resolver
 	events    chan DNSEvent
 	closeOnce sync.Once
@@ -50,9 +53,23 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		cfg.CacheEntries = 2048
 	}
 
+	var flt *Filter
+	if cfg.BlockAds {
+		flt = NewFilter()
+		if cfg.BlocklistPath != "" {
+			count, err := flt.LoadFile(cfg.BlocklistPath)
+			if err != nil {
+				log.Printf("Warning: error loading DNS blocklist from %s: %v", cfg.BlocklistPath, err)
+			} else {
+				log.Printf("SUCCESS: DNS Ad & Malware Blocker ACTIVE (%d rules loaded from %s)", count, cfg.BlocklistPath)
+			}
+		}
+	}
+
 	return &Server{
 		cfg:      cfg,
 		cache:    NewCache(cfg.CacheEntries),
+		filter:   flt,
 		resolver: NewResolver(cfg.Upstreams, cfg.QueryTimeout),
 		events:   make(chan DNSEvent, 100),
 		stopChan: make(chan struct{}),
@@ -67,6 +84,11 @@ func (s *Server) Events() <-chan DNSEvent {
 // Cache returns a pointer to the in-memory cache for inspection or testing.
 func (s *Server) Cache() *Cache {
 	return s.cache
+}
+
+// Filter returns a pointer to the ad filter for inspection or testing.
+func (s *Server) Filter() *Filter {
+	return s.filter
 }
 
 // Start opens the UDP listener socket and processes incoming queries asynchronously.
@@ -135,7 +157,17 @@ func (s *Server) handleQuery(clientAddr net.Addr, queryData []byte) {
 		domain = "malformed"
 	}
 
-	// 1. Check in-memory cache
+	// 1. Check Ad & Malware Filter (Sinkhole 0.0.0.0 / ::)
+	if s.filter != nil && s.filter.IsBlocked(domain) {
+		sinkhole := BuildSinkholeResponse(queryData, clientTID, qtype)
+		if sinkhole != nil {
+			_, _ = s.pc.WriteTo(sinkhole, clientAddr)
+			s.emitEvent(clientAddr.String(), domain+" (blocked)", time.Since(start), true)
+			return
+		}
+	}
+
+	// 2. Check in-memory cache
 	cacheKey := CacheKey(domain, qtype)
 	if cachedResp, hit := s.cache.Get(cacheKey, clientTID); hit {
 		_, _ = s.pc.WriteTo(cachedResp, clientAddr)

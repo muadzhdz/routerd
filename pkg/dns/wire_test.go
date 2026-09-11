@@ -2,6 +2,7 @@ package dns
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,11 +14,8 @@ func buildMockQuery(domain string, qtype uint16, tid uint16) []byte {
 	binary.BigEndian.PutUint16(buf[2:4], 0x0100) // Standard query, RD=1
 	binary.BigEndian.PutUint16(buf[4:6], 1)      // QDCOUNT = 1
 
-	// Encode domain labels: "google.com" -> \x06google\x03com\x00
-	labels := []string{"google", "com"}
-	if domain == "api.github.com" {
-		labels = []string{"api", "github", "com"}
-	}
+	// Encode domain labels dynamically
+	labels := strings.Split(domain, ".")
 	for _, l := range labels {
 		buf = append(buf, byte(len(l)))
 		buf = append(buf, []byte(l)...)
@@ -106,3 +104,72 @@ func TestExtractTTL(t *testing.T) {
 		t.Errorf("expected defaultTTL (%v), got %v", defaultTTL, ttl4)
 	}
 }
+
+func TestBuildSinkholeResponse(t *testing.T) {
+	// 1. IPv4 Type A Sinkhole -> 0.0.0.0
+	queryA := buildMockQuery("googleads.g.doubleclick.net", TypeA, 0xbeef)
+	respA := BuildSinkholeResponse(queryA, 0xbeef, TypeA)
+	if respA == nil {
+		t.Fatal("expected non-nil response for Type A")
+	}
+
+	// Verify TID and Flags
+	tid := binary.BigEndian.Uint16(respA[0:2])
+	flags := binary.BigEndian.Uint16(respA[2:4])
+	if tid != 0xbeef {
+		t.Errorf("expected TID=0xbeef, got 0x%x", tid)
+	}
+	if flags&0x8000 == 0 {
+		t.Errorf("expected QR=1 (Response), got flags=0x%x", flags)
+	}
+	if flags&0x000f != 0 {
+		t.Errorf("expected RCODE=0 (NOERROR), got flags=0x%x", flags)
+	}
+
+	// Verify ANCOUNT = 1
+	ancount := binary.BigEndian.Uint16(respA[6:8])
+	if ancount != 1 {
+		t.Errorf("expected ANCOUNT=1, got %d", ancount)
+	}
+
+	// Verify IPv4 Answer is 0.0.0.0 (last 4 bytes of 16-byte answer)
+	rdataA := respA[len(respA)-4:]
+	if rdataA[0] != 0 || rdataA[1] != 0 || rdataA[2] != 0 || rdataA[3] != 0 {
+		t.Errorf("expected 0.0.0.0, got %v", rdataA)
+	}
+
+	// 2. IPv6 Type AAAA Sinkhole -> ::
+	queryAAAA := buildMockQuery("googleads.g.doubleclick.net", TypeAAAA, 0xcafe)
+	respAAAA := BuildSinkholeResponse(queryAAAA, 0xcafe, TypeAAAA)
+	if respAAAA == nil {
+		t.Fatal("expected non-nil response for Type AAAA")
+	}
+	ancountAAAA := binary.BigEndian.Uint16(respAAAA[6:8])
+	if ancountAAAA != 1 {
+		t.Errorf("expected ANCOUNT=1 for AAAA, got %d", ancountAAAA)
+	}
+	rdataAAAA := respAAAA[len(respAAAA)-16:]
+	for i, b := range rdataAAAA {
+		if b != 0 {
+			t.Errorf("expected zero byte at %d, got %d", i, b)
+		}
+	}
+
+	// 3. Other QTYPE (e.g. 65 - HTTPS) -> Empty NOERROR
+	queryHTTPS := buildMockQuery("googleads.g.doubleclick.net", 65, 0x1234)
+	respHTTPS := BuildSinkholeResponse(queryHTTPS, 0x1234, 65)
+	if respHTTPS == nil {
+		t.Fatal("expected non-nil response for HTTPS")
+	}
+	ancountHTTPS := binary.BigEndian.Uint16(respHTTPS[6:8])
+	if ancountHTTPS != 0 {
+		t.Errorf("expected ANCOUNT=0 for HTTPS query, got %d", ancountHTTPS)
+	}
+
+	// 4. Short/invalid query
+	shortResp := BuildSinkholeResponse([]byte{0x01, 0x02}, 0x1111, TypeA)
+	if shortResp != nil {
+		t.Errorf("expected nil for short query, got %v", shortResp)
+	}
+}
+

@@ -18,13 +18,15 @@ var sparkBlocks = []rune{' ', ' ', '▂', '▃', '▄', '▅', '▆', '▇', '�
 
 // Config carries initial parameters for dashboard initialization.
 type Config struct {
-	WANIface      string
-	WANIP         string
-	HotspotActive bool
-	SSID          string
-	StatsProvider engine.StatsProvider
-	DNSEventChan  <-chan dns.DNSEvent
-	ShutdownFunc  func()
+	WANIface       string
+	WANIP          string
+	HotspotActive  bool
+	SSID           string
+	StatsProvider  engine.StatsProvider
+	DNSEventChan   <-chan dns.DNSEvent
+	SnapshotChan   <-chan telemetry.Snapshot
+	IsRemoteClient bool
+	ShutdownFunc   func()
 }
 
 // Model represents the complete state of the TUI dashboard (The Elm Architecture).
@@ -90,6 +92,7 @@ type Model struct {
 
 type tickMsg time.Time
 type dnsMsg dns.DNSEvent
+type snapshotMsg telemetry.Snapshot
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
@@ -110,14 +113,36 @@ func waitForDNSEvent(ch <-chan dns.DNSEvent) tea.Cmd {
 	}
 }
 
+func waitForSnapshot(ch <-chan telemetry.Snapshot) tea.Cmd {
+	return func() tea.Msg {
+		if ch == nil {
+			return nil
+		}
+		snap, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return snapshotMsg(snap)
+	}
+}
+
 // NewModel creates a new instance of the dashboard Model.
 func NewModel(cfg Config) Model {
 	histLen := 50
-	col := telemetry.NewCollector(telemetry.Config{
-		WANIface:      cfg.WANIface,
-		HotspotActive: cfg.HotspotActive,
-		StatsProvider: cfg.StatsProvider,
-	})
+	var col *telemetry.Collector
+	if cfg.SnapshotChan == nil {
+		col = telemetry.NewCollector(telemetry.Config{
+			WANIface:      cfg.WANIface,
+			HotspotActive: cfg.HotspotActive,
+			StatsProvider: cfg.StatsProvider,
+		})
+	}
+
+	initLog := fmt.Sprintf("[%s] Engine initialized. All eBPF hooks mounted.", time.Now().Format("15:04:05"))
+	if cfg.IsRemoteClient {
+		initLog = fmt.Sprintf("[%s] Attached to routerd daemon via Unix socket.", time.Now().Format("15:04:05"))
+	}
+
 	return Model{
 		cfg:          cfg,
 		collector:    col,
@@ -129,15 +154,20 @@ func NewModel(cfg Config) Model {
 		apRxHistory:  make([]int, histLen),
 		apTxHistory:  make([]int, histLen),
 		clients:      []hotspot.ConnectedClient{},
-		logs:         []string{fmt.Sprintf("[%s] Engine initialized. All eBPF hooks mounted.", time.Now().Format("15:04:05"))},
+		logs:         []string{initLog},
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		tickCmd(),
+	cmds := []tea.Cmd{
 		waitForDNSEvent(m.cfg.DNSEventChan),
-	)
+	}
+	if m.cfg.SnapshotChan != nil {
+		cmds = append(cmds, waitForSnapshot(m.cfg.SnapshotChan))
+	} else {
+		cmds = append(cmds, tickCmd())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -227,40 +257,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+	case snapshotMsg:
+		snap := telemetry.Snapshot(msg)
+		m.applySnapshot(snap)
+		m.dnsHistory = append(m.dnsHistory[1:], m.dnsRate)
+		m.dnsRate = 0
+		if m.cfg.SnapshotChan != nil {
+			cmds = append(cmds, waitForSnapshot(m.cfg.SnapshotChan))
+		}
+
 	case tickMsg:
 		if m.collector != nil {
 			snap := m.collector.Sample()
-
-			m.totalClampCount = snap.ClampedPackets
-			m.clampRate = snap.ClampRate
-			m.peakClampRate = snap.PeakClampRate
-			m.clampHistory = snap.ClampHistory
-
-			m.totalHelloCount = snap.ClientHellos
-
-			m.totalRx = snap.WAN.RxBytes
-			m.totalTx = snap.WAN.TxBytes
-			m.rxRate = snap.WAN.RxRate
-			m.txRate = snap.WAN.TxRate
-			m.rxPeak = snap.WAN.RxPeak
-			m.txPeak = snap.WAN.TxPeak
-			m.rxHistory = snap.WAN.RxHistory
-			m.txHistory = snap.WAN.TxHistory
-
-			if m.cfg.HotspotActive {
-				m.totalApRx = snap.LAN.RxBytes
-				m.totalApTx = snap.LAN.TxBytes
-				m.apRxRate = snap.LAN.RxRate
-				m.apTxRate = snap.LAN.TxRate
-				m.apRxPeak = snap.LAN.RxPeak
-				m.apTxPeak = snap.LAN.TxPeak
-				m.apRxHistory = snap.LAN.RxHistory
-				m.apTxHistory = snap.LAN.TxHistory
-				m.clients = snap.Clients
-				if m.selectedIdx >= len(m.clients) && len(m.clients) > 0 {
-					m.selectedIdx = len(m.clients) - 1
-				}
-			}
+			m.applySnapshot(snap)
 		}
 
 		m.dnsHistory = append(m.dnsHistory[1:], m.dnsRate)
@@ -311,6 +320,49 @@ func (m *Model) addLog(entry string) {
 	}
 	if wasAtEnd {
 		m.selectedLogIdx = len(m.logs) - 1
+	}
+}
+
+func (m *Model) applySnapshot(snap telemetry.Snapshot) {
+	m.totalClampCount = snap.ClampedPackets
+	m.clampRate = snap.ClampRate
+	m.peakClampRate = snap.PeakClampRate
+	if len(snap.ClampHistory) > 0 {
+		m.clampHistory = snap.ClampHistory
+	}
+
+	m.totalHelloCount = snap.ClientHellos
+
+	m.totalRx = snap.WAN.RxBytes
+	m.totalTx = snap.WAN.TxBytes
+	m.rxRate = snap.WAN.RxRate
+	m.txRate = snap.WAN.TxRate
+	m.rxPeak = snap.WAN.RxPeak
+	m.txPeak = snap.WAN.TxPeak
+	if len(snap.WAN.RxHistory) > 0 {
+		m.rxHistory = snap.WAN.RxHistory
+	}
+	if len(snap.WAN.TxHistory) > 0 {
+		m.txHistory = snap.WAN.TxHistory
+	}
+
+	if m.cfg.HotspotActive || snap.LAN.RxBytes > 0 || len(snap.Clients) > 0 {
+		m.totalApRx = snap.LAN.RxBytes
+		m.totalApTx = snap.LAN.TxBytes
+		m.apRxRate = snap.LAN.RxRate
+		m.apTxRate = snap.LAN.TxRate
+		m.apRxPeak = snap.LAN.RxPeak
+		m.apTxPeak = snap.LAN.TxPeak
+		if len(snap.LAN.RxHistory) > 0 {
+			m.apRxHistory = snap.LAN.RxHistory
+		}
+		if len(snap.LAN.TxHistory) > 0 {
+			m.apTxHistory = snap.LAN.TxHistory
+		}
+		m.clients = snap.Clients
+		if m.selectedIdx >= len(m.clients) && len(m.clients) > 0 {
+			m.selectedIdx = len(m.clients) - 1
+		}
 	}
 }
 
@@ -1038,6 +1090,9 @@ func renderHotspotBox(width, height int, cfg Config, clientsCount int) string {
 // View renders full-screen grid matching btop layout.
 func (m Model) View() string {
 	if m.quitting {
+		if m.cfg.IsRemoteClient {
+			return "Detached from routerd daemon. Daemon is still active in background.\n"
+		}
 		return "Shutting down routerd cleanly...\n"
 	}
 
@@ -1285,9 +1340,13 @@ func (m Model) View() string {
 		Faint(true).
 		Width(totalW).
 		Align(lipgloss.Center)
-	footerMsg := "tab switch focus   ↑/↓ select station   ↵ filter   b/n switch WAN/LAN   c clear   q quit"
+	quitAction := "quit"
+	if m.cfg.IsRemoteClient {
+		quitAction = "detach"
+	}
+	footerMsg := fmt.Sprintf("tab switch focus   ↑/↓ select station   ↵ filter   b/n switch WAN/LAN   c clear   q %s", quitAction)
 	if m.focusPane == 1 {
-		footerMsg = "tab switch focus   ↑/↓ select log   PgUp/PgDn page   End latest   b/n switch WAN/LAN   c clear   q quit"
+		footerMsg = fmt.Sprintf("tab switch focus   ↑/↓ select log   PgUp/PgDn page   End latest   b/n switch WAN/LAN   c clear   q %s", quitAction)
 	}
 	footer := footerStyle.Render(footerMsg)
 

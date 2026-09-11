@@ -174,6 +174,7 @@ rsn_pairwise=CCMP
 
 	// 9. Launch dnsmasq
 	c.dnsmasqCmd = exec.Command("dnsmasq",
+		"--user=root",
 		"--no-hosts",
 		"--keep-in-foreground",
 		"--listen-address="+c.cfg.GatewayIP,

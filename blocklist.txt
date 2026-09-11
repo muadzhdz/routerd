@@ -1,0 +1,72 @@
+# routerd In-Memory DNS Ad & Malware Blocklist
+# Format: raw domain name per line or /etc/hosts format (0.0.0.0 domain.com)
+# Any subdomain of a listed domain is automatically blocked (suffix matching).
+
+# --- Google Ads & DoubleClick ---
+doubleclick.net
+googleadservices.com
+googlesyndication.com
+googleads.g.doubleclick.net
+adservice.google.com
+admob.com
+google-analytics.com
+googletagmanager.com
+googletagservices.com
+
+# --- Meta / Facebook Tracking & Pixel ---
+an.facebook.com
+pixel.facebook.com
+connect.facebook.net
+analytics.facebook.com
+
+# --- TikTok & ByteDance Telemetry ---
+analytics.tiktok.com
+ads.tiktok.com
+mon.byteoversea.com
+mon.snssdk.com
+
+# --- Global Ad Networks & Native Ads ---
+criteo.com
+criteo.net
+taboola.com
+outbrain.com
+inmobi.com
+pubmatic.com
+rubiconproject.com
+adnxs.com
+openx.net
+scorecardresearch.com
+quantserve.com
+casalemedia.com
+adroll.com
+smartadserver.com
+revcontent.com
+
+# --- Mobile In-App Ads & Video SDKs ---
+applovin.com
+unityads.unity3d.com
+ironsrc.com
+vungle.com
+adcolony.com
+chartboost.com
+tapjoy.com
+flurry.com
+adjust.com
+appsflyer.com
+branch.io
+kochava.com
+
+# --- Aggressive Popups & Redirects ---
+popads.net
+propellerads.com
+exoclick.com
+trafficjunky.com
+adsterra.com
+hilltopads.net
+
+# --- OEM Device Telemetry ---
+tracking.miui.com
+ad.xiaomi.com
+data.flurry.com
+telemetry.microsoft.com
+v10.events.data.microsoft.com

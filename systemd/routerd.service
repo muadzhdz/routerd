@@ -7,7 +7,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 # Binary location after installation via 'sudo cp routerd /usr/local/bin/'
-ExecStart=/usr/local/bin/routerd -headless -hotspot
+# Settings are loaded from /etc/routerd/routerd.conf (HOTSPOT, SSID, PASSWORD, etc.)
+ExecStart=/usr/local/bin/routerd --headless
 Restart=on-failure
 RestartSec=5s
 KillMode=mixed
@@ -15,8 +16,8 @@ KillSignal=SIGTERM
 TimeoutStopSec=15s
 
 # Linux Least-Privilege Capabilities
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW CAP_SYS_ADMIN
-AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW CAP_SYS_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_NET_RAW CAP_SYS_ADMIN CAP_NET_BIND_SERVICE
 LimitMEMLOCK=infinity
 
 StandardOutput=journal

@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muadzhdz/routerd/pkg/hotspot"
+	"github.com/muadzhdz/routerd/pkg/telemetry"
 )
 
 func TestDashboardNewFeatures(t *testing.T) {
@@ -106,5 +107,59 @@ func TestDashboardNewFeatures(t *testing.T) {
 		if w > m.width {
 			t.Errorf("line %d width %d exceeds max %d", i, w, m.width)
 		}
+	}
+}
+
+func TestDashboardRemoteClientMode(t *testing.T) {
+	snapCh := make(chan telemetry.Snapshot, 1)
+	cfg := Config{
+		WANIface:       "wlp2s0",
+		WANIP:          "10.100.2.185",
+		HotspotActive:  true,
+		SSID:           "routerd",
+		SnapshotChan:   snapCh,
+		IsRemoteClient: true,
+	}
+
+	m := NewModel(cfg)
+	m.width = 120
+	m.height = 30
+
+	// 1. Initial log contains attached message
+	if len(m.logs) == 0 || !strings.Contains(m.logs[0], "Attached to routerd daemon") {
+		t.Errorf("expected initial log to indicate attached to daemon, got: %v", m.logs)
+	}
+
+	// 2. Receive snapshotMsg
+	sampleSnap := telemetry.Snapshot{
+		ClampedPackets: 250,
+		ClientHellos:   120,
+		WAN: telemetry.BandwidthStats{
+			RxRate: 40960,
+			TxRate: 20480,
+		},
+	}
+	m2, _ := m.Update(snapshotMsg(sampleSnap))
+	model2 := m2.(Model)
+
+	if model2.totalClampCount != 250 {
+		t.Errorf("expected totalClampCount=250, got %d", model2.totalClampCount)
+	}
+	if model2.rxRate != 40960 {
+		t.Errorf("expected RxRate=40960, got %d", model2.rxRate)
+	}
+
+	// 3. Footer shows 'q detach'
+	v := model2.View()
+	if !strings.Contains(v, "q detach") {
+		t.Errorf("expected footer to show 'q detach', got:\n%s", v)
+	}
+
+	// 4. Quitting shows detached message
+	m3, _ := model2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	model3 := m3.(Model)
+	vQuit := model3.View()
+	if !strings.Contains(vQuit, "Detached from routerd daemon") {
+		t.Errorf("expected quit view to show detached message, got: %s", vQuit)
 	}
 }
