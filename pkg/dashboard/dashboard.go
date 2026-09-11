@@ -2,8 +2,6 @@ package dashboard
 
 import (
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 	"github.com/muadzhdz/routerd/pkg/dns"
 	"github.com/muadzhdz/routerd/pkg/engine"
 	"github.com/muadzhdz/routerd/pkg/hotspot"
+	"github.com/muadzhdz/routerd/pkg/telemetry"
 )
 
 var sparkBlocks = []rune{' ', ' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
@@ -31,6 +30,7 @@ type Config struct {
 // Model merepresentasikan state penuh dashboard TUI (The Elm Architecture)
 type Model struct {
 	cfg       Config
+	collector *telemetry.Collector
 	width     int
 	height    int
 	startTime time.Time
@@ -113,10 +113,14 @@ func waitForDNSEvent(ch <-chan dns.DNSEvent) tea.Cmd {
 // NewModel membuat instance baru dari Model dashboard
 func NewModel(cfg Config) Model {
 	histLen := 50
-	rxInit, txInit := readNetDev(cfg.WANIface)
-	apRxInit, apTxInit := readNetDev("ap0")
+	col := telemetry.NewCollector(telemetry.Config{
+		WANIface:      cfg.WANIface,
+		HotspotActive: cfg.HotspotActive,
+		StatsProvider: cfg.StatsProvider,
+	})
 	return Model{
 		cfg:          cfg,
+		collector:    col,
 		startTime:    time.Now(),
 		clampHistory: make([]int, histLen),
 		dnsHistory:   make([]int, histLen),
@@ -124,10 +128,6 @@ func NewModel(cfg Config) Model {
 		txHistory:    make([]int, histLen),
 		apRxHistory:  make([]int, histLen),
 		apTxHistory:  make([]int, histLen),
-		prevRxBytes:  rxInit,
-		prevTxBytes:  txInit,
-		prevApRx:     apRxInit,
-		prevApTx:     apTxInit,
 		clients:      []hotspot.ConnectedClient{},
 		logs:         []string{fmt.Sprintf("[%s] Engine initialized. All eBPF hooks mounted.", time.Now().Format("15:04:05"))},
 	}
@@ -228,91 +228,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 	case tickMsg:
-		// 1. Baca data eBPF Map via StatsProvider
-		var currentClamp uint64
-		var currentHello uint64
+		if m.collector != nil {
+			snap := m.collector.Sample()
 
-		if m.cfg.StatsProvider != nil {
-			if snap, err := m.cfg.StatsProvider.Stats(); err == nil {
-				currentClamp = snap.ClampedPackets
-				currentHello = snap.ClientHellos
-			}
-		}
+			m.totalClampCount = snap.ClampedPackets
+			m.clampRate = snap.ClampRate
+			m.peakClampRate = snap.PeakClampRate
+			m.clampHistory = snap.ClampHistory
 
-		if m.prevClampCount > 0 && currentClamp >= m.prevClampCount {
-			m.clampRate = int(currentClamp - m.prevClampCount)
-		} else {
-			m.clampRate = 0
-		}
-		if m.clampRate > m.peakClampRate {
-			m.peakClampRate = m.clampRate
-		}
-		m.totalClampCount = currentClamp
-		m.prevClampCount = currentClamp
+			m.totalHelloCount = snap.ClientHellos
 
-		m.totalHelloCount = currentHello
-		m.prevHelloCount = currentHello
+			m.totalRx = snap.WAN.RxBytes
+			m.totalTx = snap.WAN.TxBytes
+			m.rxRate = snap.WAN.RxRate
+			m.txRate = snap.WAN.TxRate
+			m.rxPeak = snap.WAN.RxPeak
+			m.txPeak = snap.WAN.TxPeak
+			m.rxHistory = snap.WAN.RxHistory
+			m.txHistory = snap.WAN.TxHistory
 
-		// 2. Bandwidth dari /proc/net/dev
-		curRx, curTx := readNetDev(m.cfg.WANIface)
-		if m.prevRxBytes > 0 && curRx >= m.prevRxBytes {
-			m.rxRate = curRx - m.prevRxBytes
-		}
-		if m.prevTxBytes > 0 && curTx >= m.prevTxBytes {
-			m.txRate = curTx - m.prevTxBytes
-		}
-		if m.rxRate > m.rxPeak {
-			m.rxPeak = m.rxRate
-		}
-		if m.txRate > m.txPeak {
-			m.txPeak = m.txRate
-		}
-		m.prevRxBytes = curRx
-		m.prevTxBytes = curTx
-		m.totalRx = curRx
-		m.totalTx = curTx
-
-		// Shift sparklines
-		m.clampHistory = append(m.clampHistory[1:], m.clampRate)
-		m.dnsHistory = append(m.dnsHistory[1:], m.dnsRate)
-		m.rxHistory = append(m.rxHistory[1:], int(m.rxRate/1024))
-		m.txHistory = append(m.txHistory[1:], int(m.txRate/1024))
-		m.dnsRate = 0
-
-		// Bandwidth telemetry untuk Hotspot LAN (ap0)
-		if m.cfg.HotspotActive {
-			apRx, apTx := readNetDev("ap0")
-			if m.prevApRx > 0 && apRx >= m.prevApRx {
-				m.apRxRate = apRx - m.prevApRx
-			} else {
-				m.apRxRate = 0
-			}
-			if m.prevApTx > 0 && apTx >= m.prevApTx {
-				m.apTxRate = apTx - m.prevApTx
-			} else {
-				m.apTxRate = 0
-			}
-			if m.apRxRate > m.apRxPeak {
-				m.apRxPeak = m.apRxRate
-			}
-			if m.apTxRate > m.apTxPeak {
-				m.apTxPeak = m.apTxRate
-			}
-			m.prevApRx = apRx
-			m.prevApTx = apTx
-			m.totalApRx = apRx
-			m.totalApTx = apTx
-			m.apRxHistory = append(m.apRxHistory[1:], int(m.apRxRate/1024))
-			m.apTxHistory = append(m.apTxHistory[1:], int(m.apTxRate/1024))
-
-			clients, err := hotspot.GetConnectedClients()
-			if err == nil {
-				m.clients = clients
+			if m.cfg.HotspotActive {
+				m.totalApRx = snap.LAN.RxBytes
+				m.totalApTx = snap.LAN.TxBytes
+				m.apRxRate = snap.LAN.RxRate
+				m.apTxRate = snap.LAN.TxRate
+				m.apRxPeak = snap.LAN.RxPeak
+				m.apTxPeak = snap.LAN.TxPeak
+				m.apRxHistory = snap.LAN.RxHistory
+				m.apTxHistory = snap.LAN.TxHistory
+				m.clients = snap.Clients
 				if m.selectedIdx >= len(m.clients) && len(m.clients) > 0 {
 					m.selectedIdx = len(m.clients) - 1
 				}
 			}
 		}
+
+		m.dnsHistory = append(m.dnsHistory[1:], m.dnsRate)
+		m.dnsRate = 0
 
 		cmds = append(cmds, tickCmd())
 
@@ -362,25 +314,6 @@ func (m *Model) addLog(entry string) {
 	}
 }
 
-// readNetDev membaca RX dan TX byte dari /proc/net/dev
-func readNetDev(iface string) (rx uint64, tx uint64) {
-	data, err := os.ReadFile("/proc/net/dev")
-	if err != nil {
-		return 0, 0
-	}
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, iface+":") {
-			fields := strings.Fields(strings.ReplaceAll(line, ":", " "))
-			if len(fields) >= 10 {
-				r, _ := strconv.ParseUint(fields[1], 10, 64)
-				t, _ := strconv.ParseUint(fields[9], 10, 64)
-				return r, t
-			}
-		}
-	}
-	return 0, 0
-}
 
 func formatBytes(b uint64) string {
 	const (

@@ -35,3 +35,11 @@ _Avoid_: Packet Parser, DNS Unmarshaler
 **AP Controller**:
 The subsystem orchestrating virtual Wi-Fi interface creation (ap0), hostapd 802.11 daemon, dnsmasq DHCP, and iptables Stealth NAT rules with deterministic LIFO rollback guarantees.
 _Avoid_: Hotspot Manager, Wi-Fi Script
+
+**Telemetry Collector**:
+The subsystem sampling kernel virtual filesystems (/proc/net/dev) and eBPF maps at regular intervals, computing bandwidth rates, maintaining history ring buffers, and emitting atomic Snapshot records.
+_Avoid_: Metrics Daemon, Stats Poller
+
+**Bandwidth Snapshot**:
+An immutable record capturing instantaneous byte counters, rates (bytes/sec), and peak values for a network interface.
+_Avoid_: Network Stats, Traffic Info

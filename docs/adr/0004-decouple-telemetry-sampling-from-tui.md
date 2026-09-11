@@ -1,0 +1,3 @@
+# Decouple Telemetry Sampling and Bandwidth Math from Dashboard TUI
+
+We extract `/proc/net/dev` parsing, delta bandwidth calculations, peak tracking, and sparkline ring buffer shifting out of `pkg/dashboard` into a dedicated `pkg/telemetry.Collector`. Previously, the Bubbletea TUI model directly polled kernel filesystems and calculated rates on every tick, tightly coupling UI view rendering to Linux I/O and preventing automated testing of bandwidth math. The Telemetry Collector provides an atomic `Sample()` returning an immutable `Snapshot`, and exposes pure string parsers for `/proc/net/dev` for non-root unit testing.
