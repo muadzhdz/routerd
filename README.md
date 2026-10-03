@@ -1,5 +1,9 @@
 # routerd
 
+<p align="center">
+  <img src="preview.gif" alt="routerd preview" width="100%" />
+</p>
+
 eBPF Stealth Router, In-Memory DNS Sinkhole, and Wi-Fi Access Point Daemon for Linux.
 
 `routerd` turns a Linux machine (Arch Linux, Omarchy, Debian, Ubuntu) into a high-performance, stealth wireless gateway. It couples in-kernel packet manipulation using modern eBPF TCX hooks, a sub-millisecond RFC 1035 DNS wire sinkhole, an isolated Wi-Fi access point with LIFO rollback guarantees, and an optional WireGuard policy-routed VPN uplink.
