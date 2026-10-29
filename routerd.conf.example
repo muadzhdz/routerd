@@ -13,8 +13,12 @@ SSID=routerd
 # Wi-Fi Hotspot WPA2 Passphrase (minimum 8 characters)
 PASSWORD=kopi-hitam123
 
-# Upstream DNS servers for stealth DoH fallback (comma-separated IP list)
-UPSTREAMS=1.1.1.1, 8.8.8.8
+# Prevent Wi-Fi clients from communicating with or sniffing each other (true / false)
+CLIENT_ISOLATION=true
+
+# Upstream DNS servers for stealth DoH / DoT fallback (comma-separated IPs, https:// DoH, or tls:// DoT URIs)
+# Supports: 1.1.1.1, 8.8.8.8, 9.9.9.9, tls://1.1.1.1:853, tls://9.9.9.9:853
+UPSTREAMS=1.1.1.1, 8.8.8.8, 9.9.9.9, tls://1.1.1.1:853, tls://9.9.9.9:853
 
 # In-Memory DNS Ad & Malware Blocker (true / false)
 BLOCK_ADS=true

@@ -15,17 +15,17 @@ A detached Unix Domain Socket IPC architecture allows the daemon to run unprivil
                |                       routerd Daemon                        |
                |                                                             |
                |  +--------------------+             +--------------------+  |
-               |  |  eBPF Engine (TCX) |             |  DoH DNS Resolver  |  |
-               |  |  - Ingress Clamp   |             |  - RFC 1035 Wire   |  |
-               |  |  - Egress DPI      |             |  - In-Memory Cache |  |
-               |  |  - Port Filter     |             |  - Ad Sinkholing   |  |
+               |  |  eBPF Engine (TCX) |             |  DoH/DoT Resolver  |  |
+               |  |  - In-Kernel MSS   |             |  - RFC 1035 Wire   |  |
+               |  |  - Port Filter Map |             |  - In-Memory Cache |  |
+               |  |  - TLS Telemetry   |             |  - Ad Sinkholing   |  |
                |  +---------+----------+             +---------+----------+  |
                +------------|----------------------------------|-------------+
                             |                                  |
    [ Wi-Fi Clients ]        |                                  |
            |                v                                  v
-           +=======> [ ap0: 10.42.0.1 ] ──► [ DNAT :53 ] ──► [ 127.0.0.1:53 ]
-                            |                                  | (DoH Fallback)
+           +=======> [ ap0: 10.42.0.1 ] ──► [ DNAT :53 ] ──► [ 10.42.0.1:53 ]
+                            |                                  | (DoH / DoT Fallback)
                             | (Forward & MASQ)                 v
                             +──► Table 51820 ──────► [ wg0 / VPN Uplink ]
                             |                        (or Direct WAN Fallback)
@@ -35,10 +35,10 @@ A detached Unix Domain Socket IPC architecture allows the daemon to run unprivil
 
 ### Core Subsystems
 
-- **eBPF Kernel Engine (`pkg/engine`)**: Employs modern Linux 6.6+ TCX (TC BPFv2) hooks for bi-directional packet processing. Intercepts ingress SYN/ACK responses to apply RFC 1624 incremental 16-bit checksum updates and TCP window clamping. Inspects egress HTTPS handshakes for TLS ClientHello payloads using `bpf_skb_pull_data`.
-- **In-Memory DNS Sinkhole (`pkg/dns`)**: Intercepts port 53 UDP traffic redirected via Netfilter PREROUTING. Matches requested domains against an in-memory normalized suffix map ($O(1)$ amortized lookups). Blocked advertising and tracker domains receive instantaneous RFC 1035 wire sinkholes (`0.0.0.0` / `::`) with authoritative NOERROR flags. Unblocked queries are resolved over encrypted DNS-over-HTTPS (RFC 8484) with TTL caching and fail-fast SERVFAIL handling.
-- **Wi-Fi AP & Stealth NAT (`pkg/hotspot`)**: Creates a virtual `ap0` interface via `nl80211` on top of the physical wireless device, isolated from NetworkManager. Manages `hostapd` and `dnsmasq` lifetimes, configures `route_localnet=1` and iptables NAT rules, and guarantees clean teardown in strict Last-In, First-Out (LIFO) order.
-- **WireGuard VPN Uplink (`pkg/vpn`)**: Connects all hotspot traffic through an encrypted WireGuard tunnel (`vpn.conf`). Disables strict reverse path filtering (`rp_filter=0`) to allow asymmetric packet flow, configures policy routing table `51820`, and clamps TCP MSS to PMTU (`--clamp-mss-to-pmtu`) to eliminate fragmentation and blackholes.
+- **eBPF Kernel Engine (`pkg/engine`)**: Employs modern Linux 6.6+ TCX (TC BPFv2) hooks for bi-directional packet processing. Intercepts ingress/egress SYN packets to apply in-kernel TCP MSS clamping (clamping advertised MSS to 1360 bytes using RFC 1624 incremental checksum updates) eliminating PMTU blackholes across tunnels without external iptables overhead. Features dynamic eBPF hash-map destination port filtering and egress TLS ClientHello inspection.
+- **In-Memory Multi-Protocol DNS Sinkhole (`pkg/dns`)**: Intercepts port 53 UDP traffic redirected natively to the Gateway IP without compromising host loopback services. Matches requested domains against an in-memory normalized suffix map ($O(1)$ amortized lookups). Blocked advertising and tracker domains receive instantaneous RFC 1035 wire sinkholes (`0.0.0.0` / `::`) with authoritative NOERROR flags. Unblocked queries are resolved over encrypted DNS-over-HTTPS (RFC 8484) and DNS-over-TLS (RFC 7858, Port 853) with TTL caching, RFC 2308 NXDOMAIN negative caching, and automatic upstream failover.
+- **Wi-Fi AP & Zero-Trust NAT (`pkg/hotspot`)**: Creates an isolated virtual `ap0` interface via `nl80211` on top of the physical wireless radio. Enforces AP Client Isolation (`ap_isolate=1`) to prevent wireless stations from sniffing or attacking each other, manages `hostapd` and `dnsmasq` lifetimes with continuous process supervision, blocks IPv6 forwarding leaks, and guarantees clean teardown in strict Last-In, First-Out (LIFO) order.
+- **WireGuard VPN Uplink (`pkg/vpn`)**: Connects all hotspot traffic through an encrypted WireGuard tunnel (`vpn.conf`). Disables strict reverse path filtering (`rp_filter=0`) to allow asymmetric packet flow, configures policy routing table `51820`, verifies peer handshakes, and clamps TCP MSS to PMTU to eliminate fragmentation and blackholes.
 - **IPC Daemon & TUI Dashboard (`pkg/ipc`, `pkg/dashboard`)**: Multiplexes telemetry over a non-blocking streaming Unix Domain Socket (`/run/routerd/routerd.sock`). The Bubbletea TUI dashboard attaches and detaches dynamically without interrupting background routing.
 
 ---

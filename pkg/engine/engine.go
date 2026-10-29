@@ -32,6 +32,7 @@ const (
 type Config struct {
 	InterfaceName string
 	XDPMode       XDPMode
+	BlockedPorts  []uint16
 }
 
 // StatsSnapshot is an immutable telemetry data record sampled from kernel eBPF maps.
@@ -90,6 +91,14 @@ func Start(cfg Config) (*Engine, error) {
 	// 3. Load eBPF objects into kernel
 	if err := bpf.LoadBpfObjects(&eng.objs, nil); err != nil {
 		return nil, fmt.Errorf("failed to load eBPF objects into kernel: %w", err)
+	}
+
+	// Populate initial blocked ports into BPF hash map
+	if eng.objs.BlockedPorts != nil {
+		for _, port := range cfg.BlockedPorts {
+			action := uint8(1)
+			_ = eng.objs.BlockedPorts.Put(port, action)
+		}
 	}
 
 	// Rollback helper if attachment fails midway
@@ -199,6 +208,63 @@ func (e *Engine) Stats() (StatsSnapshot, error) {
 	}
 
 	return snap, nil
+}
+
+// BlockPort adds a destination port to the kernel eBPF drop map.
+func (e *Engine) BlockPort(port uint16) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed {
+		return errors.New("engine is closed")
+	}
+	if e.objs.BlockedPorts == nil {
+		return errors.New("blocked_ports map not loaded")
+	}
+	action := uint8(1)
+	return e.objs.BlockedPorts.Put(port, action)
+}
+
+// UnblockPort removes a destination port from the kernel eBPF drop map.
+func (e *Engine) UnblockPort(port uint16) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed {
+		return errors.New("engine is closed")
+	}
+	if e.objs.BlockedPorts == nil {
+		return errors.New("blocked_ports map not loaded")
+	}
+	err := e.objs.BlockedPorts.Delete(port)
+	if err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+		return err
+	}
+	return nil
+}
+
+// BlockedPorts returns all ports currently marked for drop in kernel eBPF map.
+func (e *Engine) BlockedPorts() ([]uint16, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed {
+		return nil, errors.New("engine is closed")
+	}
+	if e.objs.BlockedPorts == nil {
+		return nil, nil
+	}
+
+	var ports []uint16
+	var port uint16
+	var action uint8
+	iter := e.objs.BlockedPorts.Iterate()
+	for iter.Next(&port, &action) {
+		if action == 1 {
+			ports = append(ports, port)
+		}
+	}
+	return ports, iter.Err()
 }
 
 // Close detaches all hooks (TCX and XDP) and frees eBPF objects in kernel.

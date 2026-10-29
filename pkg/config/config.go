@@ -12,29 +12,31 @@ const DefaultConfigFile = "/etc/routerd/routerd.conf"
 
 // FileConfig holds the persisted router settings.
 type FileConfig struct {
-	Interface     string
-	Hotspot       bool
-	SSID          string
-	Password      string
-	Upstreams     []string
-	BlockAds      bool
-	BlocklistFile string
-	VPNEnabled    bool
-	VPNConfig     string
+	Interface       string
+	Hotspot         bool
+	SSID            string
+	Password        string
+	Upstreams       []string
+	BlockAds        bool
+	BlocklistFile   string
+	VPNEnabled      bool
+	VPNConfig       string
+	ClientIsolation bool
 }
 
 // Default returns a FileConfig with sensible default parameters.
 func Default() FileConfig {
 	return FileConfig{
-		Interface:     "",
-		Hotspot:       false,
-		SSID:          "routerd",
-		Password:      "routerd123",
-		Upstreams:     []string{"1.1.1.1", "8.8.8.8"},
-		BlockAds:      true,
-		BlocklistFile: "/etc/routerd/blocklist.txt",
-		VPNEnabled:    false,
-		VPNConfig:     "/etc/routerd/vpn.conf",
+		Interface:       "",
+		Hotspot:         false,
+		SSID:            "routerd",
+		Password:        "routerd123",
+		Upstreams:       []string{"1.1.1.1", "8.8.8.8"},
+		BlockAds:        true,
+		BlocklistFile:   "/etc/routerd/blocklist.txt",
+		VPNEnabled:      false,
+		VPNConfig:       "/etc/routerd/vpn.conf",
+		ClientIsolation: true,
 	}
 }
 
@@ -127,6 +129,11 @@ func Load(path string) (FileConfig, error) {
 		case "VPN_CONFIG", "VPN_PROFILE", "VPN_CONF":
 			if val != "" {
 				cfg.VPNConfig = val
+			}
+		case "CLIENT_ISOLATION", "AP_ISOLATE", "ISOLATE_CLIENTS":
+			b, err := strconv.ParseBool(val)
+			if err == nil {
+				cfg.ClientIsolation = b
 			}
 		}
 	}

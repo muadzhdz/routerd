@@ -19,6 +19,7 @@ func TestNormalizeUpstream(t *testing.T) {
 		{"https://adguard.com/dns-query", "https://adguard.com/dns-query"},
 		{"http://local-doh:8080/dns-query", "http://local-doh:8080/dns-query"},
 		{"10.0.0.53", "https://10.0.0.53/dns-query"},
+		{"tls://1.1.1.1:853", "tls://1.1.1.1:853"},
 		{"", ""},
 	}
 
@@ -31,10 +32,10 @@ func TestNormalizeUpstream(t *testing.T) {
 }
 
 func TestNewResolverDefaultsAndNormalization(t *testing.T) {
-	// Empty upstreams -> default DoH endpoints
+	// Empty upstreams -> default DoH and DoT endpoints (6 total: Cloudflare, Google, Quad9)
 	r1 := NewResolver(nil, 0)
-	if len(r1.upstreams) != 3 {
-		t.Errorf("expected 3 default upstreams, got %d", len(r1.upstreams))
+	if len(r1.upstreams) != 6 {
+		t.Errorf("expected 6 default upstreams, got %d", len(r1.upstreams))
 	}
 	if r1.client.Timeout != 2*time.Second {
 		t.Errorf("expected default timeout 2s, got %v", r1.client.Timeout)

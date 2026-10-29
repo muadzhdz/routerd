@@ -342,9 +342,31 @@ func main() {
 	iface := eng.Interface()
 	log.Printf("SUCCESS: eBPF Engine ACTIVE on interface [%s]!", iface.Name)
 
-	// 2. Start Stealth DoH DNS Resolver Engine with In-Memory Cache, Ad-Blocker & Fallback
+	// 2. If hotspot is active: Start Wi-Fi Access Point & Zero-Trust Isolation NAT
+	var hotspotCtrl *hotspot.Controller
+	dnsAddrs := []string{"127.0.0.1:53"}
+	if finalHotspot {
+		hotspotCtrl = hotspot.NewController(hotspot.Config{
+			ParentIface:     iface.Name,
+			SSID:            finalSSID,
+			Password:        finalPassword,
+			ClientIsolation: fileCfg.ClientIsolation,
+		})
+		if err := hotspotCtrl.Start(); err != nil {
+			log.Printf("Warning Hotspot: %v", err)
+		} else {
+			hotspot.SetDefaultController(hotspotCtrl)
+			dnsAddrs = append(dnsAddrs, "10.42.0.1:53")
+			defer func() {
+				hotspot.SetDefaultController(nil)
+				_ = hotspotCtrl.Close()
+			}()
+		}
+	}
+
+	// 3. Start Stealth DoH/DoT DNS Resolver Engine with In-Memory Cache, Ad-Blocker & Multi-Protocol Fallback
 	dnsServer, err := dns.NewServer(dns.ServerConfig{
-		ListenAddr:    "127.0.0.1:53",
+		ListenAddrs:   dnsAddrs,
 		Upstreams:     fileCfg.Upstreams,
 		BlockAds:      fileCfg.BlockAds,
 		BlocklistPath: fileCfg.BlocklistFile,
@@ -360,7 +382,7 @@ func main() {
 	// Divert system DNS on target interface to 127.0.0.1 via systemd-resolved
 	_ = exec.Command("resolvectl", "dns", iface.Name, "127.0.0.1").Run()
 	_ = exec.Command("resolvectl", "flush-caches").Run()
-	log.Printf("SUCCESS: System DNS [%s] redirected to 127.0.0.1 (DoH Cloudflare/Google)!", iface.Name)
+	log.Printf("SUCCESS: System DNS [%s] redirected to 127.0.0.1 (DoH/DoT Cloudflare/Google/Quad9)!", iface.Name)
 
 	// Guarantee default DNS restoration on program exit
 	defer func() {
@@ -368,25 +390,6 @@ func main() {
 		_ = exec.Command("resolvectl", "flush-caches").Run()
 		log.Println("SUCCESS: DNS reverted to default DHCP.")
 	}()
-
-	// 3. If hotspot is active: Start Wi-Fi Access Point & Stealth NAT
-	var hotspotCtrl *hotspot.Controller
-	if finalHotspot {
-		hotspotCtrl = hotspot.NewController(hotspot.Config{
-			ParentIface: iface.Name,
-			SSID:        finalSSID,
-			Password:    finalPassword,
-		})
-		if err := hotspotCtrl.Start(); err != nil {
-			log.Printf("Warning Hotspot: %v", err)
-		} else {
-			hotspot.SetDefaultController(hotspotCtrl)
-			defer func() {
-				hotspot.SetDefaultController(nil)
-				_ = hotspotCtrl.Close()
-			}()
-		}
-	}
 
 	// 4. If VPN is enabled: Start WireGuard VPN uplink & apply policy routing
 	var vpnCtrl *vpn.Controller

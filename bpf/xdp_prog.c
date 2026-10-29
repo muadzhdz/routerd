@@ -1,12 +1,24 @@
-#include "vmlinux.h"
+#include <linux/types.h>
+#include <linux/bpf.h>
+#include <linux/if_ether.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/in.h>
+#include <linux/tcp.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+
 #define TC_ACT_OK 0
 #define TC_ACT_SHOT 2
-#define ETH_P_IP 0x0800
-#define IPPROTO_TCP 6
 
-// BPF MAP 1: Ingress DROP (Port 8080)
+#ifndef ETH_P_IP
+#define ETH_P_IP 0x0800
+#endif
+#ifndef ETH_P_IPV6
+#define ETH_P_IPV6 0x86DD
+#endif
+
+// BPF MAP 1: Ingress DROP Counter
 struct {
   __uint(type, BPF_MAP_TYPE_ARRAY);
   __type(key, __u32);
@@ -14,7 +26,7 @@ struct {
   __uint(max_entries, 1);
 } tcp_drop_count SEC(".maps");
 
-// BPF MAP 2: Egress TLS ClientHello Hunter!
+// BPF MAP 2: Egress TLS ClientHello Counter
 struct {
   __uint(type, BPF_MAP_TYPE_ARRAY);
   __type(key, __u32);
@@ -22,13 +34,21 @@ struct {
   __uint(max_entries, 1);
 } client_hello_count SEC(".maps");
 
-// BPF MAP #: Ingress Clamped SYN/ACK Counter
+// BPF MAP 3: Ingress/Egress Clamped MSS Counter
 struct {
   __uint(type, BPF_MAP_TYPE_ARRAY);
   __type(key, __u32);
   __type(value, __u64);
   __uint(max_entries, 1);
 } synack_clamp_count SEC(".maps");
+
+// BPF MAP 4: Dynamic Blocked Ports Hash Map (key: port, val: action)
+struct {
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __type(key, __u16);
+  __type(value, __u8);
+  __uint(max_entries, 256);
+} blocked_ports SEC(".maps");
 
 // RFC 1624 mathematical helper: Fast incremental 16-bit checksum update
 static inline void update_csum16(__u16 *csum, __u16 old_val, __u16 new_val) {
@@ -38,9 +58,9 @@ static inline void update_csum16(__u16 *csum, __u16 old_val, __u16 new_val) {
   *csum = ~sum;
 }
 
-//======================================
-// 1. INGRESS HOOK (XDP - Entry Point)
-//======================================
+//==================================================
+// 1. INGRESS HOOK (XDP - High Performance Filter)
+//==================================================
 SEC("xdp")
 int xdp_router_func(struct xdp_md *ctx) {
   void *data = (void *)(long)ctx->data;
@@ -50,35 +70,61 @@ int xdp_router_func(struct xdp_md *ctx) {
   if ((void *)eth + sizeof(struct ethhdr) > data_end)
     return XDP_PASS;
 
-  if (eth->h_proto != bpf_htons(ETH_P_IP))
-    return XDP_PASS;
+  // Handle IPv4
+  if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+    struct iphdr *ip = (void *)eth + sizeof(struct ethhdr);
+    if ((void *)ip + sizeof(struct iphdr) > data_end)
+      return XDP_PASS;
 
-  struct iphdr *ip = (void *)eth + sizeof(struct ethhdr);
-  if ((void *)ip + sizeof(struct iphdr) > data_end)
-    return XDP_PASS;
+    if (ip->protocol != IPPROTO_TCP || ip->ihl < 5)
+      return XDP_PASS;
 
-  if (ip->protocol != IPPROTO_TCP || ip->ihl < 5)
-    return XDP_PASS;
+    struct tcphdr *tcp = (void *)ip + (ip->ihl * 4);
+    if ((void *)tcp + sizeof(struct tcphdr) > data_end)
+      return XDP_PASS;
 
-  struct tcphdr *tcp = (void *)ip + (ip->ihl * 4);
-  if ((void *)tcp + sizeof(struct tcphdr) > data_end)
-    return XDP_PASS;
-
-  if (bpf_ntohs(tcp->dest) == 8080) {
-    __u32 key = 0;
-    __u64 *val = bpf_map_lookup_elem(&tcp_drop_count, &key);
-    if (val) {
-      __sync_fetch_and_add(val, 1);
+    __u16 dport = bpf_ntohs(tcp->dest);
+    __u8 *blocked = bpf_map_lookup_elem(&blocked_ports, &dport);
+    if (blocked && *blocked == 1) {
+      __u32 key = 0;
+      __u64 *val = bpf_map_lookup_elem(&tcp_drop_count, &key);
+      if (val) {
+        __sync_fetch_and_add(val, 1);
+      }
+      return XDP_DROP;
     }
-    return XDP_DROP;
+  }
+
+  // Handle IPv6
+  if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
+    struct ipv6hdr *ip6 = (void *)eth + sizeof(struct ethhdr);
+    if ((void *)ip6 + sizeof(struct ipv6hdr) > data_end)
+      return XDP_PASS;
+
+    if (ip6->nexthdr == IPPROTO_TCP) {
+      struct tcphdr *tcp = (void *)ip6 + sizeof(struct ipv6hdr);
+      if ((void *)tcp + sizeof(struct tcphdr) > data_end)
+        return XDP_PASS;
+
+      __u16 dport = bpf_ntohs(tcp->dest);
+      __u8 *blocked = bpf_map_lookup_elem(&blocked_ports, &dport);
+      if (blocked && *blocked == 1) {
+        __u32 key = 0;
+        __u64 *val = bpf_map_lookup_elem(&tcp_drop_count, &key);
+        if (val) {
+          __sync_fetch_and_add(val, 1);
+        }
+        return XDP_DROP;
+      }
+    }
   }
 
   return XDP_PASS;
 }
 
-//=================================================
-// 2. EGRESS HOOK (TC - Exit Point / DPI Guard)
-//=================================================
+//==================================================
+// 2. EGRESS HOOK (TC - Exit Point / Telemetry Guard)
+//==================================================
 SEC("tc")
 int tc_egress_func(struct __sk_buff *skb) {
   void *data = (void *)(long)skb->data;
@@ -102,17 +148,14 @@ int tc_egress_func(struct __sk_buff *skb) {
   if ((void *)tcp + sizeof(struct tcphdr) > data_end)
     return TC_ACT_OK;
 
-  // Check whether destined for Port 443 (HTTPS)
+  // Inspect outbound HTTPS traffic for TLS ClientHello
   if (bpf_ntohs(tcp->dest) == 443) {
-    // 1. Pull first 128 bytes into linear buffer so TLS payload is accessible in skb->data
     if (bpf_skb_pull_data(skb, 128) < 0)
       return TC_ACT_OK;
 
-    // 2. MUST re-evaluate pointers because packet memory may shift after pull!
     data = (void *)(long)skb->data;
     data_end = (void *)(long)skb->data_end;
-    
-    // Re-validate IP & TCP boundaries after pointer refresh 
+
     eth = data;
     if ((void *)eth + sizeof(struct ethhdr) > data_end)
       return TC_ACT_OK;
@@ -125,12 +168,9 @@ int tc_egress_func(struct __sk_buff *skb) {
     if ((void *)tcp + sizeof(struct tcphdr) > data_end)
       return TC_ACT_OK;
 
-    // 3. Calculate TCP payload offset
     void *payload = (void *)tcp + (tcp->doff * 4);
-
     if ((void *)payload + 6 <= data_end) {
       __u8 *bytes = payload;
-
       if (bytes[0] == 0x16 && bytes[5] == 0x01) {
         __u32 key = 0;
         __u64 *val = bpf_map_lookup_elem(&client_hello_count, &key);
@@ -140,13 +180,13 @@ int tc_egress_func(struct __sk_buff *skb) {
       }
     }
   }
-    return TC_ACT_OK;
+
+  return TC_ACT_OK;
 }
 
 //========================================================
-// 3. INGRESS HOOK (TC Ingress - The TCP Window Clamper)
+// 3. INGRESS HOOK (TC Ingress - In-Kernel TCP MSS Clamper)
 //========================================================
-
 SEC("tc")
 int tc_ingress_func(struct __sk_buff *skb) {
   void *data = (void *)(long)skb->data;
@@ -170,22 +210,42 @@ int tc_ingress_func(struct __sk_buff *skb) {
   if ((void *)tcp + sizeof(struct tcphdr) > data_end)
     return TC_ACT_OK;
 
-  // Intercept reply from Port 443 with SYN and ACK flags set
-  if (bpf_ntohs(tcp->source) == 443 && tcp->syn && tcp->ack) {
-    __u16 old_win = tcp->window;
-    __u16 new_win = bpf_htons(2); // Clamp window size to 2 bytes
-
-    // Update L4 TCP checksum incrementally
-    update_csum16(&tcp->check, old_win, new_win);
-
-    // Overwrite window in kernel memory
-    tcp->window = new_win;
-
-    // Record into BPF Map
-    __u32 key = 0;
-    __u64 *val = bpf_map_lookup_elem(&synack_clamp_count, &key);
-    if (val) {
-      __sync_fetch_and_add(val, 1);
+  // Apply TCP MSS clamping on SYN / SYN-ACK packets to prevent PMTU blackholes
+  if (tcp->syn) {
+    if (tcp->doff > 5) {
+      __u8 *opt = (void *)tcp + sizeof(struct tcphdr);
+      __u8 *opt_end = (void *)tcp + (tcp->doff * 4);
+      if ((void *)opt_end <= data_end && (void *)opt + 4 <= (void *)opt_end) {
+        #pragma unroll
+        for (int i = 0; i < 10; i++) {
+          if ((void *)opt + 4 > (void *)opt_end || (void *)opt + 4 > data_end)
+            break;
+          if (opt[0] == 0) // End of Option List
+            break;
+          if (opt[0] == 1) { // No-Op
+            opt += 1;
+            continue;
+          }
+          if (opt[0] == 2 && opt[1] == 4) { // MSS option
+            __u16 *mss_ptr = (__u16 *)(opt + 2);
+            __u16 old_mss = *mss_ptr;
+            __u16 target_mss = bpf_htons(1360); // 1360 for WireGuard / PPPoE MTU safety
+            if (bpf_ntohs(old_mss) > 1360) {
+              update_csum16(&tcp->check, old_mss, target_mss);
+              *mss_ptr = target_mss;
+              __u32 key = 0;
+              __u64 *val = bpf_map_lookup_elem(&synack_clamp_count, &key);
+              if (val) {
+                __sync_fetch_and_add(val, 1);
+              }
+            }
+            break;
+          }
+          if (opt[1] < 2)
+            break;
+          opt += opt[1];
+        }
+      }
     }
   }
 

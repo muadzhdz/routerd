@@ -60,3 +60,15 @@ func TestControllerLIFORollbackOrder(t *testing.T) {
 		t.Errorf("expected order [3, 2, 1], got %v", executionOrder)
 	}
 }
+
+func TestControllerHealthAndIsolation(t *testing.T) {
+	ctrl := NewController(Config{
+		ClientIsolation: true,
+	})
+	if ctrl.IsHealthy() {
+		t.Fatal("unstarted controller should not report healthy")
+	}
+	if !ctrl.cfg.ClientIsolation {
+		t.Fatal("expected ClientIsolation to be true")
+	}
+}

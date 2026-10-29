@@ -15,6 +15,7 @@ import (
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
+	BpfMapBlockedPorts     = "blocked_ports"
 	BpfMapClientHelloCount = "client_hello_count"
 	BpfMapSynackClampCount = "synack_clamp_count"
 	BpfMapTcpDropCount     = "tcp_drop_count"
@@ -74,6 +75,7 @@ type BpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type BpfMapSpecs struct {
+	BlockedPorts     *ebpf.MapSpec `ebpf:"blocked_ports"`
 	ClientHelloCount *ebpf.MapSpec `ebpf:"client_hello_count"`
 	SynackClampCount *ebpf.MapSpec `ebpf:"synack_clamp_count"`
 	TcpDropCount     *ebpf.MapSpec `ebpf:"tcp_drop_count"`
@@ -105,6 +107,7 @@ func (o *BpfObjects) Close() error {
 //
 // It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type BpfMaps struct {
+	BlockedPorts     *ebpf.Map `ebpf:"blocked_ports"`
 	ClientHelloCount *ebpf.Map `ebpf:"client_hello_count"`
 	SynackClampCount *ebpf.Map `ebpf:"synack_clamp_count"`
 	TcpDropCount     *ebpf.Map `ebpf:"tcp_drop_count"`
@@ -112,6 +115,7 @@ type BpfMaps struct {
 
 func (m *BpfMaps) Close() error {
 	return _BpfClose(
+		m.BlockedPorts,
 		m.ClientHelloCount,
 		m.SynackClampCount,
 		m.TcpDropCount,

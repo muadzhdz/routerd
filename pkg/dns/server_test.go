@@ -109,3 +109,23 @@ func TestServerAdBlockSinkhole(t *testing.T) {
 		t.Error("timeout waiting for sinkhole event")
 	}
 }
+
+func TestServerMultiListenAddrs(t *testing.T) {
+	srv, err := NewServer(ServerConfig{
+		ListenAddrs:  []string{"127.0.0.1:0", "127.0.0.1:0"},
+		QueryTimeout: 1 * time.Second,
+		CacheEntries: 50,
+	})
+	if err != nil {
+		t.Fatalf("failed to create multi-listen server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("failed to start multi-listen server: %v", err)
+	}
+	defer srv.Close()
+
+	if len(srv.pcs) != 2 {
+		t.Fatalf("expected 2 active packet connections, got %d", len(srv.pcs))
+	}
+}

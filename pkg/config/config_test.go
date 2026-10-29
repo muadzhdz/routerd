@@ -69,6 +69,9 @@ VPN_CONFIG=/etc/routerd/custom-vpn.conf
 	if cfg.VPNConfig != "/etc/routerd/custom-vpn.conf" {
 		t.Errorf("expected VPNConfig /etc/routerd/custom-vpn.conf, got '%s'", cfg.VPNConfig)
 	}
+	if !cfg.ClientIsolation {
+		t.Errorf("expected ClientIsolation default true, got false")
+	}
 }
 
 func TestLoadAutoInterface(t *testing.T) {

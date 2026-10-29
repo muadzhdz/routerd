@@ -71,4 +71,15 @@ func TestEngineCloseIdempotent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when querying stats on closed engine, got nil")
 	}
+
+	// Dynamic port operations after close must return error
+	if err := eng.BlockPort(8080); err == nil {
+		t.Fatal("expected error on BlockPort after close, got nil")
+	}
+	if err := eng.UnblockPort(8080); err == nil {
+		t.Fatal("expected error on UnblockPort after close, got nil")
+	}
+	if _, err := eng.BlockedPorts(); err == nil {
+		t.Fatal("expected error on BlockedPorts after close, got nil")
+	}
 }

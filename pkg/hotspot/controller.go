@@ -24,13 +24,14 @@ const (
 
 // Config carries configuration for initializing the AP Controller.
 type Config struct {
-	ParentIface string
-	SSID        string
-	Password    string
-	GatewayIP   string // Default "10.42.0.1"
-	SubnetCIDR  string // Default "10.42.0.0/24"
-	APInterface string // Default "ap0"
-	RunDir      string // Default "/run/routerd"
+	ParentIface     string
+	SSID            string
+	Password        string
+	GatewayIP       string // Default "10.42.0.1"
+	SubnetCIDR      string // Default "10.42.0.0/24"
+	APInterface     string // Default "ap0"
+	RunDir          string // Default "/run/routerd"
+	ClientIsolation bool   // Default true (ap_isolate=1)
 }
 
 // Controller manages the lifecycle of hostapd, dnsmasq, and iptables Stealth NAT with LIFO rollback.
@@ -38,6 +39,7 @@ type Controller struct {
 	cfg        Config
 	mu         sync.Mutex
 	running    bool
+	healthy    bool
 	cleanups   []func()
 	hostapdCmd *exec.Cmd
 	dnsmasqCmd *exec.Cmd
@@ -131,6 +133,11 @@ func (c *Controller) Start() error {
 	hostapdLogPath := c.runtimePath("hostapd.log")
 	dnsmasqLeasePath := c.runtimePath("dnsmasq.leases")
 
+	isolateVal := 1
+	if !c.cfg.ClientIsolation {
+		isolateVal = 0
+	}
+
 	confContent := fmt.Sprintf(`interface=%s
 driver=nl80211
 ssid=%s
@@ -139,12 +146,13 @@ channel=%d
 ieee80211n=1
 wmm_enabled=1
 ht_capab=[HT20]
+ap_isolate=%d
 auth_algs=1
 wpa=2
 wpa_passphrase=%s
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
-`, c.cfg.APInterface, c.cfg.SSID, hwMode, ch, c.cfg.Password)
+`, c.cfg.APInterface, c.cfg.SSID, hwMode, ch, isolateVal, c.cfg.Password)
 
 	if err := os.WriteFile(hostapdConf, []byte(confContent), 0600); err != nil {
 		c.rollback()
@@ -216,22 +224,20 @@ rsn_pairwise=CCMP
 		_ = os.Remove(dnsmasqLeasePath)
 	})
 
-	// 10. Firewall Routing & Stealth NAT
+	// 10. Firewall Routing & Zero-Trust Isolation NAT
 	_ = exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
-	_ = exec.Command("sysctl", "-w", "net.ipv4.conf.all.route_localnet=1").Run()
+
+	// Redirect DNS queries arriving on AP interface directly to Gateway IP (e.g. 10.42.0.1:53)
+	// eliminating route_localnet=1 and protecting host loopback services
+	dnsTarget := c.cfg.GatewayIP + ":53"
+	_ = exec.Command("iptables", "-t", "nat", "-I", "PREROUTING", "1", "-i", c.cfg.APInterface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", dnsTarget).Run()
 	c.addCleanup(func() {
-		_ = exec.Command("sysctl", "-w", "net.ipv4.conf.all.route_localnet=0").Run()
+		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", c.cfg.APInterface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", dnsTarget).Run()
 	})
 
-	// DNS redirection: Port 53 -> 127.0.0.1:53
-	_ = exec.Command("iptables", "-t", "nat", "-I", "PREROUTING", "1", "-i", c.cfg.APInterface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:53").Run()
+	_ = exec.Command("iptables", "-t", "nat", "-I", "PREROUTING", "1", "-i", c.cfg.APInterface, "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", dnsTarget).Run()
 	c.addCleanup(func() {
-		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", c.cfg.APInterface, "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:53").Run()
-	})
-
-	_ = exec.Command("iptables", "-t", "nat", "-I", "PREROUTING", "1", "-i", c.cfg.APInterface, "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:53").Run()
-	c.addCleanup(func() {
-		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", c.cfg.APInterface, "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", "127.0.0.1:53").Run()
+		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", c.cfg.APInterface, "-p", "tcp", "--dport", "53", "-j", "DNAT", "--to-destination", dnsTarget).Run()
 	})
 
 	// Masquerade NAT & Forward
@@ -250,10 +256,22 @@ rsn_pairwise=CCMP
 		_ = exec.Command("iptables", "-D", "FORWARD", "-i", c.cfg.ParentIface, "-o", c.cfg.APInterface, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT").Run()
 	})
 
+	// IPv6 Leak Protection: Prevent unencrypted or unmonitored IPv6 traffic bypass
+	_ = exec.Command("ip6tables", "-I", "FORWARD", "1", "-i", c.cfg.APInterface, "-j", "DROP").Run()
+	c.addCleanup(func() {
+		_ = exec.Command("ip6tables", "-D", "FORWARD", "-i", c.cfg.APInterface, "-j", "DROP").Run()
+	})
+
 	c.running = true
-	log.Printf("SUCCESS: Wi-Fi Hotspot [%s] ACTIVE on [%s]! (Password: %s)", c.cfg.SSID, c.cfg.APInterface, c.cfg.Password)
+	c.healthy = true
+
+	// Launch active background process supervision
+	go c.superviseProcess(c.hostapdCmd, "hostapd")
+	go c.superviseProcess(c.dnsmasqCmd, "dnsmasq")
+
+	log.Printf("SUCCESS: Wi-Fi Hotspot [%s] ACTIVE on [%s]! (Password: %s, ClientIsolation: %v)", c.cfg.SSID, c.cfg.APInterface, c.cfg.Password, c.cfg.ClientIsolation)
 	log.Printf("SUCCESS: DHCP Server [10.42.0.10 - 10.42.0.50] ready to serve clients")
-	log.Printf("SUCCESS: Stealth NAT Active -> All client DNS traffic redirected to DoH 127.0.0.1:53")
+	log.Printf("SUCCESS: Stealth NAT Active -> All client DNS traffic redirected to DoH %s", dnsTarget)
 	return nil
 }
 
@@ -275,6 +293,26 @@ func (c *Controller) GetConnectedClients() ([]ConnectedClient, error) {
 	return MergeClientStats(leases, stats), nil
 }
 
+// IsHealthy returns true if the hotspot and its child processes are running normally.
+func (c *Controller) IsHealthy() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.running && c.healthy
+}
+
+func (c *Controller) superviseProcess(cmd *exec.Cmd, name string) {
+	if cmd == nil {
+		return
+	}
+	err := cmd.Wait()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.running {
+		c.healthy = false
+		log.Printf("HOTSPOT ALERT: Subprocess [%s] died unexpectedly: %v", name, err)
+	}
+}
+
 // Close stops hostapd, dnsmasq, and removes all iptables rules in LIFO order.
 func (c *Controller) Close() error {
 	c.mu.Lock()
@@ -284,6 +322,7 @@ func (c *Controller) Close() error {
 		return nil
 	}
 	c.running = false
+	c.healthy = false
 
 	log.Println("HOTSPOT: Stopping Wi-Fi Hotspot and cleaning up NAT in LIFO order...")
 	c.rollback()

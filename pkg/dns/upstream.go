@@ -3,33 +3,40 @@ package dns
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 )
 
 var defaultUpstreams = []string{
-	"https://1.1.1.1/dns-query",       // Cloudflare Primary
-	"https://dns.google/dns-query",    // Google Fallback
-	"https://dns.quad9.net/dns-query", // Quad9 Fallback
+	"https://1.1.1.1/dns-query",       // Cloudflare DoH
+	"tls://1.1.1.1:853",               // Cloudflare DoT
+	"https://dns.google/dns-query",    // Google DoH
+	"tls://8.8.8.8:853",               // Google DoT
+	"https://dns.quad9.net/dns-query", // Quad9 DoH
+	"tls://9.9.9.9:853",               // Quad9 DoT
 }
 
-// Resolver queries upstream DoH endpoints with sequential failover.
+// Resolver queries upstream DoH and DoT endpoints with sequential failover.
 type Resolver struct {
 	client    *http.Client
 	upstreams []string
+	timeout   time.Duration
 }
 
-// NormalizeUpstream converts a raw IP or DoH URL into a fully-qualified DoH HTTPS endpoint.
+// NormalizeUpstream converts a raw IP, DoH URL, or DoT URI into a normalized endpoint.
 func NormalizeUpstream(upstream string) string {
 	u := strings.TrimSpace(upstream)
 	if u == "" {
 		return ""
 	}
-	if strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://") {
+	if strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "tls://") {
 		return u
 	}
 	switch u {
@@ -44,7 +51,7 @@ func NormalizeUpstream(upstream string) string {
 	}
 }
 
-// NewResolver creates a new resolver with the specified DoH upstream endpoints.
+// NewResolver creates a new resolver with the specified DoH/DoT upstream endpoints.
 func NewResolver(upstreams []string, timeout time.Duration) *Resolver {
 	var normalized []string
 	for _, u := range upstreams {
@@ -63,14 +70,79 @@ func NewResolver(upstreams []string, timeout time.Duration) *Resolver {
 			Timeout: timeout,
 		},
 		upstreams: normalized,
+		timeout:   timeout,
 	}
 }
 
-// Query transmits a DNS wire message to upstream DoH providers, failing over sequentially if errors occur.
+// queryDoT queries a DNS-over-TLS (RFC 7858) upstream server over port 853.
+func (r *Resolver) queryDoT(ctx context.Context, endpoint string, queryData []byte) ([]byte, error) {
+	rawTarget := strings.TrimPrefix(endpoint, "tls://")
+	host, port, err := net.SplitHostPort(rawTarget)
+	if err != nil {
+		host = rawTarget
+		port = "853"
+	}
+
+	dialer := &net.Dialer{Timeout: r.timeout}
+	tlsConf := &tls.Config{
+		ServerName: host,
+		MinVersion: tls.VersionTLS12,
+	}
+
+	conn, err := tls.DialWithDialer(dialer, "tcp", net.JoinHostPort(host, port), tlsConf)
+	if err != nil {
+		return nil, fmt.Errorf("tls dial error on %s: %w", endpoint, err)
+	}
+	defer conn.Close()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	} else {
+		_ = conn.SetDeadline(time.Now().Add(r.timeout))
+	}
+
+	// RFC 7858 Section 3.3: 2-octet length prefix
+	var lenBuf [2]byte
+	binary.BigEndian.PutUint16(lenBuf[:], uint16(len(queryData)))
+
+	if _, err := conn.Write(lenBuf[:]); err != nil {
+		return nil, fmt.Errorf("failed to write length prefix: %w", err)
+	}
+	if _, err := conn.Write(queryData); err != nil {
+		return nil, fmt.Errorf("failed to write query wire data: %w", err)
+	}
+
+	if _, err := io.ReadFull(conn, lenBuf[:]); err != nil {
+		return nil, fmt.Errorf("failed to read response length prefix: %w", err)
+	}
+
+	respLen := int(binary.BigEndian.Uint16(lenBuf[:]))
+	if respLen < 12 || respLen > 4096 {
+		return nil, fmt.Errorf("invalid DNS wire response length (%d)", respLen)
+	}
+
+	respBody := make([]byte, respLen)
+	if _, err := io.ReadFull(conn, respBody); err != nil {
+		return nil, fmt.Errorf("failed to read complete wire response: %w", err)
+	}
+
+	return respBody, nil
+}
+
+// Query transmits a DNS wire message to upstream DoH/DoT providers, failing over sequentially if errors occur.
 func (r *Resolver) Query(ctx context.Context, queryData []byte) ([]byte, string, error) {
 	var lastErr error
 
 	for _, endpoint := range r.upstreams {
+		if strings.HasPrefix(endpoint, "tls://") {
+			body, err := r.queryDoT(ctx, endpoint, queryData)
+			if err != nil {
+				lastErr = fmt.Errorf("upstream DoT %s error: %w", endpoint, err)
+				continue
+			}
+			return body, endpoint, nil
+		}
+
 		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(queryData))
 		if err != nil {
 			lastErr = err
@@ -109,5 +181,5 @@ func (r *Resolver) Query(ctx context.Context, queryData []byte) ([]byte, string,
 	if lastErr != nil {
 		return nil, "", lastErr
 	}
-	return nil, "", errors.New("no upstream DoH endpoints available")
+	return nil, "", errors.New("no upstream DoH/DoT endpoints available")
 }

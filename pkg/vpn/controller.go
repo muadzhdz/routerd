@@ -5,8 +5,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const wireguardTable = "51820"
@@ -58,6 +60,37 @@ func (c *Controller) InterfaceName() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.ifaceName
+}
+
+// LatestHandshake queries WireGuard for the most recent peer handshake timestamp.
+func (c *Controller) LatestHandshake() (time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.active || c.ifaceName == "" {
+		return time.Time{}, false
+	}
+
+	out, err := exec.Command("wg", "show", c.ifaceName, "latest-handshakes").Output()
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	var latest int64
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			if ts, err := strconv.ParseInt(parts[1], 10, 64); err == nil && ts > latest {
+				latest = ts
+			}
+		}
+	}
+
+	if latest > 0 {
+		return time.Unix(latest, 0), true
+	}
+	return time.Time{}, false
 }
 
 // Start brings up the WireGuard VPN tunnel and applies necessary policy routing.
