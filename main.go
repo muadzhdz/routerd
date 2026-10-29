@@ -344,7 +344,7 @@ func main() {
 
 	// 2. If hotspot is active: Start Wi-Fi Access Point & Zero-Trust Isolation NAT
 	var hotspotCtrl *hotspot.Controller
-	dnsAddrs := []string{"127.0.0.1:53"}
+	dnsAddrs := []string{"0.0.0.0:53"}
 	if finalHotspot {
 		hotspotCtrl = hotspot.NewController(hotspot.Config{
 			ParentIface:     iface.Name,
@@ -356,7 +356,6 @@ func main() {
 			log.Printf("Warning Hotspot: %v", err)
 		} else {
 			hotspot.SetDefaultController(hotspotCtrl)
-			dnsAddrs = append(dnsAddrs, "10.42.0.1:53")
 			defer func() {
 				hotspot.SetDefaultController(nil)
 				_ = hotspotCtrl.Close()
