@@ -211,41 +211,64 @@ int tc_ingress_func(struct __sk_buff *skb) {
     return TC_ACT_OK;
 
   // Apply TCP MSS clamping on SYN / SYN-ACK packets to prevent PMTU blackholes
-  if (tcp->syn) {
-    if (tcp->doff > 5) {
-      __u8 *opt = (void *)tcp + sizeof(struct tcphdr);
-      __u8 *opt_end = (void *)tcp + (tcp->doff * 4);
-      if ((void *)opt_end <= data_end && (void *)opt + 4 <= (void *)opt_end) {
-        #pragma unroll
-        for (int i = 0; i < 10; i++) {
-          if ((void *)opt + 4 > (void *)opt_end || (void *)opt + 4 > data_end)
-            break;
-          if (opt[0] == 0) // End of Option List
-            break;
-          if (opt[0] == 1) { // No-Op
-            opt += 1;
-            continue;
-          }
-          if (opt[0] == 2 && opt[1] == 4) { // MSS option
-            __u16 *mss_ptr = (__u16 *)(opt + 2);
-            __u16 old_mss = *mss_ptr;
-            __u16 target_mss = bpf_htons(1360); // 1360 for WireGuard / PPPoE MTU safety
-            if (bpf_ntohs(old_mss) > 1360) {
-              update_csum16(&tcp->check, old_mss, target_mss);
-              *mss_ptr = target_mss;
-              __u32 key = 0;
-              __u64 *val = bpf_map_lookup_elem(&synack_clamp_count, &key);
-              if (val) {
-                __sync_fetch_and_add(val, 1);
-              }
-            }
-            break;
-          }
-          if (opt[1] < 2)
-            break;
-          opt += opt[1];
-        }
+  if (tcp->syn && tcp->doff > 5) {
+    if (bpf_skb_pull_data(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + 60) < 0)
+      return TC_ACT_OK;
+
+    data = (void *)(long)skb->data;
+    data_end = (void *)(long)skb->data_end;
+
+    eth = data;
+    if ((void *)eth + sizeof(struct ethhdr) > data_end)
+      return TC_ACT_OK;
+
+    ip = (void *)eth + sizeof(struct ethhdr);
+    if ((void *)ip + sizeof(struct iphdr) > data_end)
+      return TC_ACT_OK;
+
+    if (ip->protocol != IPPROTO_TCP || ip->ihl < 5)
+      return TC_ACT_OK;
+
+    tcp = (void *)ip + (ip->ihl * 4);
+    if ((void *)tcp + sizeof(struct tcphdr) > data_end)
+      return TC_ACT_OK;
+
+    __u8 *opt = (void *)tcp + sizeof(struct tcphdr);
+
+    #pragma unroll
+    for (int i = 0; i < 8; i++) {
+      if ((void *)opt + 4 > data_end)
+        break;
+
+      __u8 kind = opt[0];
+      if (kind == 0) // End of Option List
+        break;
+      if (kind == 1) { // No-Op
+        opt += 1;
+        continue;
       }
+      if (kind == 2) { // MSS option
+        if (opt[1] == 4) {
+          __u16 *mss_ptr = (__u16 *)(opt + 2);
+          __u16 old_mss = *mss_ptr;
+          __u16 target_mss = bpf_htons(1360); // 1360 for WireGuard / PPPoE MTU safety
+          if (bpf_ntohs(old_mss) > 1360) {
+            update_csum16(&tcp->check, old_mss, target_mss);
+            *mss_ptr = target_mss;
+            __u32 key = 0;
+            __u64 *val = bpf_map_lookup_elem(&synack_clamp_count, &key);
+            if (val) {
+              __sync_fetch_and_add(val, 1);
+            }
+          }
+        }
+        break;
+      }
+
+      __u8 len = opt[1];
+      if (len < 2 || len > 40)
+        break;
+      opt += len;
     }
   }
 
