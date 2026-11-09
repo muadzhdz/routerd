@@ -83,3 +83,51 @@ func TestEngineCloseIdempotent(t *testing.T) {
 		t.Fatal("expected error on BlockedPorts after close, got nil")
 	}
 }
+
+func TestBlockedPortsMethods(t *testing.T) {
+	eng := &Engine{closed: true}
+
+	if err := eng.BlockPort(8080); err == nil {
+		t.Fatal("expected error on closed engine")
+	}
+
+	if err := eng.UnblockPort(8080); err == nil {
+		t.Fatal("expected error on closed engine")
+	}
+
+	if eng.IsPortBlocked(8080) {
+		t.Fatal("expected false on closed engine")
+	}
+
+	if _, err := eng.BlockedPorts(); err == nil {
+		t.Fatal("expected error on closed engine")
+	}
+}
+
+func TestProcessEventsChannel(t *testing.T) {
+	ch := make(chan ProcessEvent, 1)
+	eng := &Engine{
+		procEventsCh: ch,
+	}
+
+	if eng.ProcessEvents() != ch {
+		t.Fatal("expected matching channel instance")
+	}
+
+	ev := ProcessEvent{
+		PID:      1234,
+		UID:      1000,
+		DestPort: 443,
+		Comm:     "curl",
+	}
+	ch <- ev
+
+	select {
+	case received := <-eng.ProcessEvents():
+		if received.PID != 1234 || received.Comm != "curl" || received.DestPort != 443 {
+			t.Fatalf("unexpected event data: %+v", received)
+		}
+	default:
+		t.Fatal("expected event in channel")
+	}
+}

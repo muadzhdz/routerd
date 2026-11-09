@@ -18,17 +18,18 @@ var sparkBlocks = []rune{' ', ' ', '▂', '▃', '▄', '▅', '▆', '▇', '�
 
 // Config carries initial parameters for dashboard initialization.
 type Config struct {
-	WANIface       string
-	WANIP          string
-	HotspotActive  bool
-	SSID           string
-	VPNActive      bool
-	VPNIface       string
-	StatsProvider  engine.StatsProvider
-	DNSEventChan   <-chan dns.DNSEvent
-	SnapshotChan   <-chan telemetry.Snapshot
-	IsRemoteClient bool
-	ShutdownFunc   func()
+	WANIface         string
+	WANIP            string
+	HotspotActive    bool
+	SSID             string
+	VPNActive        bool
+	VPNIface         string
+	StatsProvider    engine.StatsProvider
+	DNSEventChan     <-chan dns.DNSEvent
+	ProcessEventChan <-chan engine.ProcessEvent
+	SnapshotChan     <-chan telemetry.Snapshot
+	IsRemoteClient   bool
+	ShutdownFunc     func()
 }
 
 // Model represents the complete state of the TUI dashboard (The Elm Architecture).
@@ -95,6 +96,20 @@ type Model struct {
 type tickMsg time.Time
 type dnsMsg dns.DNSEvent
 type snapshotMsg telemetry.Snapshot
+type processMsg engine.ProcessEvent
+
+func waitForProcessEvent(ch <-chan engine.ProcessEvent) tea.Cmd {
+	return func() tea.Msg {
+		if ch == nil {
+			return nil
+		}
+		ev, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return processMsg(ev)
+	}
+}
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
@@ -163,6 +178,9 @@ func NewModel(cfg Config) Model {
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		waitForDNSEvent(m.cfg.DNSEventChan),
+	}
+	if m.cfg.ProcessEventChan != nil {
+		cmds = append(cmds, waitForProcessEvent(m.cfg.ProcessEventChan))
 	}
 	if m.cfg.SnapshotChan != nil {
 		cmds = append(cmds, waitForSnapshot(m.cfg.SnapshotChan))
@@ -305,6 +323,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addLog(logLine)
 
 		cmds = append(cmds, waitForDNSEvent(m.cfg.DNSEventChan))
+
+	case processMsg:
+		ev := engine.ProcessEvent(msg)
+		srcIP := "127.0.0.1"
+		if m.cfg.WANIP != "" {
+			srcIP = m.cfg.WANIP
+		}
+		logLine := fmt.Sprintf("[%s] SOCK %-15s -> %s:%d [%s] (PID: %d)",
+			time.Now().Format("15:04:05"),
+			srcIP,
+			ev.DestIP.String(),
+			ev.DestPort,
+			ev.Comm,
+			ev.PID,
+		)
+		m.addLog(logLine)
+
+		if m.cfg.ProcessEventChan != nil {
+			cmds = append(cmds, waitForProcessEvent(m.cfg.ProcessEventChan))
+		}
 	}
 
 	return m, tea.Batch(cmds...)

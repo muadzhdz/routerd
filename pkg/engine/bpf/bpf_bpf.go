@@ -17,10 +17,12 @@ import (
 const (
 	BpfMapBlockedPorts     = "blocked_ports"
 	BpfMapClientHelloCount = "client_hello_count"
+	BpfMapConnectEvents    = "connect_events"
 	BpfMapSynackClampCount = "synack_clamp_count"
 	BpfMapTcpDropCount     = "tcp_drop_count"
 	BpfProgTcEgressFunc    = "tc_egress_func"
 	BpfProgTcIngressFunc   = "tc_ingress_func"
+	BpfProgTraceConnect    = "trace_connect"
 	BpfProgXdpRouterFunc   = "xdp_router_func"
 )
 
@@ -68,6 +70,7 @@ type BpfSpecs struct {
 type BpfProgramSpecs struct {
 	TcEgressFunc  *ebpf.ProgramSpec `ebpf:"tc_egress_func"`
 	TcIngressFunc *ebpf.ProgramSpec `ebpf:"tc_ingress_func"`
+	TraceConnect  *ebpf.ProgramSpec `ebpf:"trace_connect"`
 	XdpRouterFunc *ebpf.ProgramSpec `ebpf:"xdp_router_func"`
 }
 
@@ -77,6 +80,7 @@ type BpfProgramSpecs struct {
 type BpfMapSpecs struct {
 	BlockedPorts     *ebpf.MapSpec `ebpf:"blocked_ports"`
 	ClientHelloCount *ebpf.MapSpec `ebpf:"client_hello_count"`
+	ConnectEvents    *ebpf.MapSpec `ebpf:"connect_events"`
 	SynackClampCount *ebpf.MapSpec `ebpf:"synack_clamp_count"`
 	TcpDropCount     *ebpf.MapSpec `ebpf:"tcp_drop_count"`
 }
@@ -109,6 +113,7 @@ func (o *BpfObjects) Close() error {
 type BpfMaps struct {
 	BlockedPorts     *ebpf.Map `ebpf:"blocked_ports"`
 	ClientHelloCount *ebpf.Map `ebpf:"client_hello_count"`
+	ConnectEvents    *ebpf.Map `ebpf:"connect_events"`
 	SynackClampCount *ebpf.Map `ebpf:"synack_clamp_count"`
 	TcpDropCount     *ebpf.Map `ebpf:"tcp_drop_count"`
 }
@@ -117,6 +122,7 @@ func (m *BpfMaps) Close() error {
 	return _BpfClose(
 		m.BlockedPorts,
 		m.ClientHelloCount,
+		m.ConnectEvents,
 		m.SynackClampCount,
 		m.TcpDropCount,
 	)
@@ -134,6 +140,7 @@ type BpfVariables struct {
 type BpfPrograms struct {
 	TcEgressFunc  *ebpf.Program `ebpf:"tc_egress_func"`
 	TcIngressFunc *ebpf.Program `ebpf:"tc_ingress_func"`
+	TraceConnect  *ebpf.Program `ebpf:"trace_connect"`
 	XdpRouterFunc *ebpf.Program `ebpf:"xdp_router_func"`
 }
 
@@ -141,6 +148,7 @@ func (p *BpfPrograms) Close() error {
 	return _BpfClose(
 		p.TcEgressFunc,
 		p.TcIngressFunc,
+		p.TraceConnect,
 		p.XdpRouterFunc,
 	)
 }

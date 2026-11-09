@@ -32,3 +32,6 @@ VPN_ENABLED=false
 # Path to WireGuard VPN client profile (.conf)
 VPN_CONFIG=/etc/routerd/vpn.conf
 
+# eBPF Ingress Dynamic Port Filter (comma-separated ports to drop at XDP level)
+BLOCKED_PORTS=8080
+

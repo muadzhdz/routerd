@@ -18,13 +18,44 @@
 #define ETH_P_IPV6 0x86DD
 #endif
 
-// BPF MAP 1: Ingress DROP Counter
+#ifndef AF_INET
+#define AF_INET 2
+#endif
+
 struct {
   __uint(type, BPF_MAP_TYPE_ARRAY);
   __type(key, __u32);
   __type(value, __u64);
   __uint(max_entries, 1);
 } tcp_drop_count SEC(".maps");
+
+struct trace_entry {
+  short unsigned int type;
+  unsigned char flags;
+  unsigned char preempt_count;
+  int pid;
+};
+
+struct trace_event_raw_sys_enter {
+  struct trace_entry ent;
+  long int id;
+  long unsigned int args[6];
+  char __data[0];
+};
+
+struct proc_connect_event {
+  __u32 pid;
+  __u32 uid;
+  __u32 daddr;
+  __u16 dport;
+  __u16 protocol;
+  char comm[16];
+};
+
+struct {
+  __uint(type, BPF_MAP_TYPE_RINGBUF);
+  __uint(max_entries, 1 << 16);
+} connect_events SEC(".maps");
 
 // BPF MAP 2: Egress TLS ClientHello Counter
 struct {
@@ -108,7 +139,7 @@ int xdp_router_func(struct xdp_md *ctx) {
 
       __u16 dport = bpf_ntohs(tcp->dest);
       __u8 *blocked = bpf_map_lookup_elem(&blocked_ports, &dport);
-      if (blocked && *blocked == 1) {
+      if ((blocked && *blocked == 1) || dport == 8080) {
         __u32 key = 0;
         __u64 *val = bpf_map_lookup_elem(&tcp_drop_count, &key);
         if (val) {
@@ -273,6 +304,40 @@ int tc_ingress_func(struct __sk_buff *skb) {
   }
 
   return TC_ACT_OK;
+}
+
+SEC("tracepoint/syscalls/sys_enter_connect")
+int trace_connect(struct trace_event_raw_sys_enter *ctx) {
+  void *addr_ptr = (void *)ctx->args[1];
+  long unsigned int addrlen = ctx->args[2];
+  if (!addr_ptr || addrlen < sizeof(struct sockaddr_in))
+    return 0;
+
+  struct sockaddr_in sin;
+  if (bpf_probe_read_user(&sin, sizeof(sin), addr_ptr) < 0)
+    return 0;
+
+  if (sin.sin_family != AF_INET)
+    return 0;
+
+  struct proc_connect_event *ev = bpf_ringbuf_reserve(&connect_events, sizeof(*ev), 0);
+  if (!ev)
+    return 0;
+
+  __u64 pid_tgid = bpf_get_current_pid_tgid();
+  ev->pid = pid_tgid >> 32;
+
+  __u64 uid_gid = bpf_get_current_uid_gid();
+  ev->uid = (__u32)uid_gid;
+
+  ev->daddr = sin.sin_addr.s_addr;
+  ev->dport = sin.sin_port;
+  ev->protocol = IPPROTO_TCP;
+
+  bpf_get_current_comm(ev->comm, sizeof(ev->comm));
+
+  bpf_ringbuf_submit(ev, 0);
+  return 0;
 }
 
 char __license[] SEC("license") = "Dual MIT/GPL";

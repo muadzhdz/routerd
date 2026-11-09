@@ -9,18 +9,19 @@
   <img src="https://img.shields.io/badge/ebpf-tcx%20%7C%20xdp-orange?style=flat-square" alt="eBPF" />
   <img src="https://img.shields.io/badge/kernel-6.6+-22c55e?style=flat-square&logo=linux" alt="Kernel" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/release-v1.1.0-indigo?style=flat-square" alt="Release" />
+  <img src="https://img.shields.io/badge/release-v1.2.0-indigo?style=flat-square" alt="Release" />
 </p>
 
-**routerd** turns any Linux machine into an eBPF-powered privacy gateway and zero-trust Wi-Fi access point. It combines kernel-level packet manipulation using modern eBPF TCX hooks, an in-memory RFC 1035 DoH/DoT DNS sinkhole, single-radio virtual Wi-Fi sharing with AP client isolation, and policy-routed WireGuard VPN tunnels—all orchestrated in a single, statically stripped binary (~9.2 MB) with a decoupled Bubbletea TUI dashboard.
+**routerd** turns any Linux machine into an eBPF-powered privacy gateway and zero-trust Wi-Fi access point. It combines kernel-level packet manipulation using modern eBPF TCX hooks, Tetragon-style kernel process attribution via BPF ring buffers, an in-memory RFC 1035 DoH/DoT DNS sinkhole with 89k+ rules, single-radio virtual Wi-Fi sharing with AP client isolation, and policy-routed WireGuard VPN tunnels—all orchestrated in a single, statically stripped binary (~9.2 MB) with a decoupled Bubbletea TUI dashboard.
 
 ---
 
 ## Highlights
 
-- **In-Kernel eBPF TCX Engine**: Intercepts TCP handshakes directly in kernel space to apply RFC 1624 incremental checksum updates and clamp TCP MSS to 1360 bytes, eliminating PMTU blackholes and packet fragmentation. Includes dynamic BPF map port filtering and egress TLS ClientHello inspection.
+- **Kernel Process Attribution ala Tetragon**: Hooks into `sys_enter_connect` tracepoints and streams real-time outbound socket events via a BPF ring buffer directly to the TUI live feed. Pinpoints the exact binary name (`comm`), PID, UID, and destination IP/port for every network connection initiated by local software.
+- **In-Kernel eBPF TCX & XDP Engine**: Intercepts TCP handshakes directly in kernel space to apply RFC 1624 incremental checksum updates and clamp TCP MSS to 1360 bytes, eliminating PMTU blackholes and packet fragmentation. Features dynamic BPF hash map port filtering (`BLOCKED_PORTS`) and egress TLS ClientHello inspection.
 - **Zero-Trust Wi-Fi Gateway**: Spawns an isolated virtual interface (`ap0`) on top of your existing physical wireless card without dropping the WAN link. Binds DNS to the gateway address (`10.42.0.1:53`) rather than loopback, enforces AP client isolation (`ap_isolate=1`), blocks IPv6 forwarding leaks, and manages `hostapd`/`dnsmasq` with active process supervision.
-- **Multi-Protocol DNS Sinkhole**: Intercepts port 53 UDP traffic without third-party parser dependencies. Blocks ad and tracker domains in-memory ($O(1)$) with instantaneous `0.0.0.0` / `::` responses. Unblocked queries resolve over encrypted DNS-over-HTTPS (RFC 8484) and DNS-over-TLS (RFC 7858, Port 853) with TTL-aware caching, RFC 2308 NXDOMAIN negative caching, and automatic upstream failover (Cloudflare, Google, Quad9).
+- **Industrial Multi-Protocol DNS Sinkhole**: Intercepts port 53 UDP traffic without third-party parser dependencies. Blocks 89,000+ ad and tracker domains in-memory ($O(1)$) with instantaneous zero-alloc `0.0.0.0` / `::` responses (~176 ns/query). Unblocked queries resolve over encrypted DNS-over-HTTPS (RFC 8484) and DNS-over-TLS (RFC 7858, Port 853) with TTL-aware caching, RFC 2308 NXDOMAIN negative caching, and automatic upstream failover (Cloudflare, Google, Quad9).
 - **WireGuard Policy Routing**: Routes all hotspot traffic through an encrypted WireGuard tunnel using dedicated policy table `51820`, asymmetric reverse-path handling, and peer handshake verification.
 - **Decoupled Terminal TUI**: Runs as an unprivileged background daemon under systemd while any user can attach or detach the rich terminal dashboard on demand over a Unix Domain Socket (`/run/routerd/routerd.sock`).
 
@@ -77,6 +78,7 @@ CLIENT_ISOLATION=true
 UPSTREAMS=1.1.1.1, 8.8.8.8, 9.9.9.9, tls://1.1.1.1:853, tls://9.9.9.9:853
 BLOCK_ADS=true
 BLOCKLIST_FILE=/etc/routerd/blocklist.txt
+BLOCKED_PORTS=8080
 VPN_ENABLED=false
 VPN_CONFIG=/etc/routerd/vpn.conf
 ```
