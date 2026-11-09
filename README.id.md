@@ -9,18 +9,19 @@
   <img src="https://img.shields.io/badge/ebpf-tcx%20%7C%20xdp-orange?style=flat-square" alt="eBPF" />
   <img src="https://img.shields.io/badge/kernel-6.6+-22c55e?style=flat-square&logo=linux" alt="Kernel" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/release-v1.1.0-indigo?style=flat-square" alt="Release" />
+  <img src="https://img.shields.io/badge/release-v1.2.0-indigo?style=flat-square" alt="Release" />
 </p>
 
-**routerd** mengubah komputer Linux Anda menjadi gateway privasi berkinerja tinggi dan titik akses (Wi-Fi Access Point) berstandar *Zero-Trust*. Menggabungkan manipulasi paket tingkat kernel menggunakan hook eBPF TCX modern, sinkhole DNS DoH/DoT berbasis RFC 1035 di memori, pembagian virtual radio Wi-Fi tunggal dengan isolasi klien, serta perutean terisolasi WireGuard VPN—seluruhnya dikemas dalam satu biner statis mandiri (~9.2 MB) dengan dashboard terminal Bubbletea TUI.
+**routerd** mengubah komputer Linux Anda menjadi gateway privasi berkinerja tinggi dan titik akses (Wi-Fi Access Point) berstandar *Zero-Trust*. Menggabungkan manipulasi paket tingkat kernel menggunakan hook eBPF TCX modern, atribusi proses kernel ala Tetragon via BPF ring buffer, sinkhole DNS DoH/DoT berbasis RFC 1035 di memori dengan 89k+ aturan, pembagian virtual radio Wi-Fi tunggal dengan isolasi klien, serta perutean terisolasi WireGuard VPN—seluruhnya dikemas dalam satu biner statis mandiri (~9.2 MB) dengan dashboard terminal Bubbletea TUI.
 
 ---
 
 ## Keunggulan Utama
 
-- **Engine eBPF TCX Tingkat Kernel**: Memproses jabat tangan (handshake) TCP langsung di ruang kernel untuk menerapkan pembaruan checksum inkremental RFC 1624 dan melakukan *MSS clamping* ke 1360 byte. Mencegah *PMTU blackholes* dan fragmentasi paket tanpa membebani CPU. Dilengkapi pemfilteran port dinamis berbasis eBPF Hash Map dan inspeksi egress TLS ClientHello.
+- **Atribusi Proses Kernel ala Tetragon**: Mencegat tracepoint `sys_enter_connect` dan mengalirkan telemetri koneksi socket keluar secara real-time via BPF ring buffer langsung ke live feed TUI. Mengetahui nama biner persis (`comm`), PID, UID, dan socket tujuan untuk setiap koneksi jaringan yang dipicu aplikasi lokal.
+- **Engine eBPF TCX & XDP Tingkat Kernel**: Memproses jabat tangan (handshake) TCP langsung di ruang kernel untuk menerapkan pembaruan checksum inkremental RFC 1624 dan melakukan *MSS clamping* ke 1360 byte. Mencegah *PMTU blackholes* dan fragmentasi paket tanpa membebani CPU. Dilengkapi pemfilteran port dinamis berbasis eBPF Hash Map (`BLOCKED_PORTS`) dan inspeksi egress TLS ClientHello.
 - **Gateway Wi-Fi Zero-Trust**: Membuat antarmuka virtual terisolasi (`ap0`) di atas perangkat Wi-Fi fisik tanpa memutus koneksi internet utama (WAN). Mengarahkan DNS langsung ke IP gateway (`10.42.0.1:53`) tanpa membuka celah loopback host, menerapkan isolasi klien (`ap_isolate=1`) agar sesama perangkat tidak dapat saling intip/serang, memblokir kebocoran trafik IPv6, dan memantau proses `hostapd`/`dnsmasq` secara aktif.
-- **Sinkhole DNS Multi-Protokol**: Mencegat kueri UDP port 53 secara sub-milidetik tanpa pustaka pihak ketiga. Domain iklan dan pelacak langsung dijawab di memori ($O(1)$) dengan respon sinkhole `0.0.0.0` / `::`. Domain yang diizinkan diselesaikan melalui DNS-over-HTTPS (RFC 8484) dan DNS-over-TLS (RFC 7858, Port 853) dengan cache TTL, *negative caching* NXDOMAIN (RFC 2308), dan failover otomatis ke Cloudflare, Google, atau Quad9.
+- **Sinkhole DNS Industri Multi-Protokol**: Mencegat kueri UDP port 53 secara sub-milidetik tanpa pustaka pihak ketiga. Memblokir 89.000+ domain iklan dan pelacak di memori ($O(1)$) dengan respon zero-alloc `0.0.0.0` / `::` (~176 ns/kueri). Domain yang diizinkan diselesaikan melalui DNS-over-HTTPS (RFC 8484) dan DNS-over-TLS (RFC 7858, Port 853) dengan cache TTL, *negative caching* NXDOMAIN (RFC 2308), dan failover otomatis ke Cloudflare, Google, atau Quad9.
 - **WireGuard Policy Routing**: Mengarahkan seluruh trafik hotspot melewati terowongan VPN terenkripsi menggunakan tabel *policy routing* khusus `51820`, penanganan *asymmetric reverse-path* (`rp_filter=0`), dan verifikasi berkala jabat tangan peer.
 - **Dashboard TUI Terminal yang Terpisah (Decoupled)**: Daemon berjalan di latar belakang sebagai layanan systemd, sementara pengguna terminal biasa dapat membuka atau menutup dashboard TUI secara bebas kapan saja melalui Unix Domain Socket (`/run/routerd/routerd.sock`) tanpa mengganggu proses perutean.
 
@@ -77,6 +78,7 @@ CLIENT_ISOLATION=true
 UPSTREAMS=1.1.1.1, 8.8.8.8, 9.9.9.9, tls://1.1.1.1:853, tls://9.9.9.9:853
 BLOCK_ADS=true
 BLOCKLIST_FILE=/etc/routerd/blocklist.txt
+BLOCKED_PORTS=8080
 VPN_ENABLED=false
 VPN_CONFIG=/etc/routerd/vpn.conf
 ```
