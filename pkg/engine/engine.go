@@ -1,13 +1,17 @@
 package engine
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/muadzhdz/routerd/pkg/engine/bpf"
 	"github.com/muadzhdz/routerd/pkg/netutil"
@@ -48,15 +52,28 @@ type StatsProvider interface {
 }
 
 // Engine manages the lifecycle of eBPF programs and network hooks in the Linux kernel.
+type ProcessEvent struct {
+	PID       uint32
+	UID       uint32
+	DestIP    net.IP
+	DestPort  uint16
+	Protocol  uint16
+	Comm      string
+	Timestamp time.Time
+}
+
 type Engine struct {
-	cfg        Config
-	iface      *net.Interface
-	objs       bpf.BpfObjects
-	tcxEgress  link.Link
-	tcxIngress link.Link
-	xdpLink    link.Link
-	mu         sync.Mutex
-	closed     bool
+	cfg          Config
+	iface        *net.Interface
+	objs         bpf.BpfObjects
+	tcxEgress    link.Link
+	tcxIngress   link.Link
+	xdpLink      link.Link
+	tpLink       link.Link
+	ringReader   *ringbuf.Reader
+	procEventsCh chan ProcessEvent
+	mu           sync.Mutex
+	closed       bool
 }
 
 // Start raises kernel rlimit, loads BPF programs, and attaches TCX and XDP hooks
@@ -84,8 +101,9 @@ func Start(cfg Config) (*Engine, error) {
 	}
 
 	eng := &Engine{
-		cfg:   cfg,
-		iface: iface,
+		cfg:          cfg,
+		iface:        iface,
+		procEventsCh: make(chan ProcessEvent, 256),
 	}
 
 	// 3. Load eBPF objects into kernel
@@ -165,6 +183,18 @@ func Start(cfg Config) (*Engine, error) {
 			}
 		} else {
 			eng.xdpLink = lXdp
+		}
+	}
+
+	if eng.objs.TraceConnect != nil && eng.objs.ConnectEvents != nil {
+		tp, err := link.Tracepoint("syscalls", "sys_enter_connect", eng.objs.TraceConnect, nil)
+		if err == nil {
+			eng.tpLink = tp
+			rd, err := ringbuf.NewReader(eng.objs.ConnectEvents)
+			if err == nil {
+				eng.ringReader = rd
+				go eng.pollProcessEvents(rd)
+			}
 		}
 	}
 
@@ -300,40 +330,23 @@ func (e *Engine) Close() error {
 		e.tcxEgress = nil
 	}
 
+	if e.ringReader != nil {
+		_ = e.ringReader.Close()
+		e.ringReader = nil
+	}
+
+	if e.tpLink != nil {
+		if err := e.tpLink.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close tracepoint link: %w", err))
+		}
+		e.tpLink = nil
+	}
+
 	if err := e.objs.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to close bpf objects: %w", err))
 	}
 
 	return errors.Join(errs...)
-}
-
-func (e *Engine) BlockPort(port uint16) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.closed {
-		return errors.New("engine is closed")
-	}
-	if e.objs.BlockedPorts == nil {
-		return errors.New("blocked ports map not initialized")
-	}
-
-	val := uint8(1)
-	return e.objs.BlockedPorts.Put(port, val)
-}
-
-func (e *Engine) UnblockPort(port uint16) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.closed {
-		return errors.New("engine is closed")
-	}
-	if e.objs.BlockedPorts == nil {
-		return errors.New("blocked ports map not initialized")
-	}
-
-	return e.objs.BlockedPorts.Delete(port)
 }
 
 func (e *Engine) IsPortBlocked(port uint16) bool {
@@ -349,22 +362,53 @@ func (e *Engine) IsPortBlocked(port uint16) bool {
 	return err == nil && val == 1
 }
 
-func (e *Engine) BlockedPorts() []uint16 {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (e *Engine) ProcessEvents() <-chan ProcessEvent {
+	return e.procEventsCh
+}
 
-	if e.closed || e.objs.BlockedPorts == nil {
-		return nil
-	}
+func (e *Engine) pollProcessEvents(rd *ringbuf.Reader) {
+	for {
+		rec, err := rd.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				return
+			}
+			continue
+		}
 
-	var ports []uint16
-	var key uint16
-	var val uint8
-	iter := e.objs.BlockedPorts.Iterate()
-	for iter.Next(&key, &val) {
-		if val == 1 {
-			ports = append(ports, key)
+		if len(rec.RawSample) < 32 {
+			continue
+		}
+
+		raw := rec.RawSample
+		pid := binary.LittleEndian.Uint32(raw[0:4])
+		uid := binary.LittleEndian.Uint32(raw[4:8])
+		daddr := raw[8:12]
+		dport := binary.BigEndian.Uint16(raw[12:14])
+		proto := binary.LittleEndian.Uint16(raw[14:16])
+
+		commBytes := raw[16:32]
+		nullIdx := bytes.IndexByte(commBytes, 0)
+		if nullIdx >= 0 {
+			commBytes = commBytes[:nullIdx]
+		}
+		comm := string(commBytes)
+
+		destIP := net.IPv4(daddr[0], daddr[1], daddr[2], daddr[3])
+
+		ev := ProcessEvent{
+			PID:       pid,
+			UID:       uid,
+			DestIP:    destIP,
+			DestPort:  dport,
+			Protocol:  proto,
+			Comm:      comm,
+			Timestamp: time.Now(),
+		}
+
+		select {
+		case e.procEventsCh <- ev:
+		default:
 		}
 	}
-	return ports
 }

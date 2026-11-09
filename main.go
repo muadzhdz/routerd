@@ -516,18 +516,30 @@ func main() {
 			}
 		}()
 
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case ev := <-eng.ProcessEvents():
+					log.Printf("SOCK %s -> %s:%d [%s] (PID: %d)", iface.Name, ev.DestIP, ev.DestPort, ev.Comm, ev.PID)
+				}
+			}
+		}()
+
 		<-ctx.Done()
 		log.Println("\nReceived termination signal. Initiating graceful shutdown...")
 	} else {
 		dashCfg := dashboard.Config{
-			WANIface:      iface.Name,
-			WANIP:         wanIP,
-			HotspotActive: finalHotspot,
-			SSID:          finalSSID,
-			VPNActive:     vpnActive,
-			VPNIface:      vpnIface,
-			StatsProvider: eng,
-			DNSEventChan:  dnsServer.Events(),
+			WANIface:         iface.Name,
+			WANIP:            wanIP,
+			HotspotActive:    finalHotspot,
+			SSID:             finalSSID,
+			VPNActive:        vpnActive,
+			VPNIface:         vpnIface,
+			StatsProvider:    eng,
+			DNSEventChan:     dnsServer.Events(),
+			ProcessEventChan: eng.ProcessEvents(),
 		}
 
 		p := tea.NewProgram(dashboard.NewModel(dashCfg), tea.WithAltScreen())
