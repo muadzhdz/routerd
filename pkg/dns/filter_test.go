@@ -105,3 +105,50 @@ outbrain.com.
 		t.Error("localhost should never be blocked")
 	}
 }
+
+func TestFilterLoadProductionBlocklist(t *testing.T) {
+	blocklistPath := filepath.Join("..", "..", "blocklist.txt")
+	if _, err := os.Stat(blocklistPath); os.IsNotExist(err) {
+		t.Skip("production blocklist.txt not found, skipping")
+	}
+
+	f := NewFilter()
+	count, err := f.LoadFile(blocklistPath)
+	if err != nil {
+		t.Fatalf("failed to load production blocklist: %v", err)
+	}
+
+	if count < 80000 {
+		t.Errorf("expected at least 80000 rules, got %d", count)
+	}
+
+	testCases := []struct {
+		domain  string
+		blocked bool
+	}{
+		{"doubleclick.net", true},
+		{"adservice.google.com", true},
+		{"admob.com", true},
+		{"google.com", false},
+		{"github.com", false},
+		{"archlinux.org", false},
+	}
+
+	for _, tc := range testCases {
+		if got := f.IsBlocked(tc.domain); got != tc.blocked {
+			t.Errorf("domain %s: expected blocked=%v, got %v", tc.domain, tc.blocked, got)
+		}
+	}
+}
+
+func BenchmarkFilterLookup(b *testing.B) {
+	blocklistPath := filepath.Join("..", "..", "blocklist.txt")
+	f := NewFilter()
+	_, _ = f.LoadFile(blocklistPath)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = f.IsBlocked("pagead2.googlesyndication.com")
+		_ = f.IsBlocked("google.com")
+	}
+}
