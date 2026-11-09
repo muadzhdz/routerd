@@ -93,7 +93,6 @@ func Start(cfg Config) (*Engine, error) {
 		return nil, fmt.Errorf("failed to load eBPF objects into kernel: %w", err)
 	}
 
-	// Populate initial blocked ports into BPF hash map
 	if eng.objs.BlockedPorts != nil {
 		for _, port := range cfg.BlockedPorts {
 			action := uint8(1)
@@ -306,4 +305,66 @@ func (e *Engine) Close() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func (e *Engine) BlockPort(port uint16) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed {
+		return errors.New("engine is closed")
+	}
+	if e.objs.BlockedPorts == nil {
+		return errors.New("blocked ports map not initialized")
+	}
+
+	val := uint8(1)
+	return e.objs.BlockedPorts.Put(port, val)
+}
+
+func (e *Engine) UnblockPort(port uint16) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed {
+		return errors.New("engine is closed")
+	}
+	if e.objs.BlockedPorts == nil {
+		return errors.New("blocked ports map not initialized")
+	}
+
+	return e.objs.BlockedPorts.Delete(port)
+}
+
+func (e *Engine) IsPortBlocked(port uint16) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed || e.objs.BlockedPorts == nil {
+		return false
+	}
+
+	var val uint8
+	err := e.objs.BlockedPorts.Lookup(port, &val)
+	return err == nil && val == 1
+}
+
+func (e *Engine) BlockedPorts() []uint16 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.closed || e.objs.BlockedPorts == nil {
+		return nil
+	}
+
+	var ports []uint16
+	var key uint16
+	var val uint8
+	iter := e.objs.BlockedPorts.Iterate()
+	for iter.Next(&key, &val) {
+		if val == 1 {
+			ports = append(ports, key)
+		}
+	}
+	return ports
 }

@@ -30,6 +30,7 @@ BLOCK_ADS=true
 BLOCKLIST_FILE=/etc/routerd/custom-blocklist.txt
 VPN_ENABLED=true
 VPN_CONFIG=/etc/routerd/custom-vpn.conf
+BLOCKED_PORTS=8080,445
 `
 	tmpDir := t.TempDir()
 	confPath := filepath.Join(tmpDir, "routerd.conf")
@@ -71,6 +72,9 @@ VPN_CONFIG=/etc/routerd/custom-vpn.conf
 	}
 	if !cfg.ClientIsolation {
 		t.Errorf("expected ClientIsolation default true, got false")
+	}
+	if len(cfg.BlockedPorts) != 2 || cfg.BlockedPorts[1] != 445 {
+		t.Errorf("unexpected blocked ports: %v", cfg.BlockedPorts)
 	}
 }
 

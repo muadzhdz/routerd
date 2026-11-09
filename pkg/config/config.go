@@ -22,6 +22,7 @@ type FileConfig struct {
 	VPNEnabled      bool
 	VPNConfig       string
 	ClientIsolation bool
+	BlockedPorts    []uint16
 }
 
 // Default returns a FileConfig with sensible default parameters.
@@ -37,6 +38,7 @@ func Default() FileConfig {
 		VPNEnabled:      false,
 		VPNConfig:       "/etc/routerd/vpn.conf",
 		ClientIsolation: true,
+		BlockedPorts:    []uint16{8080},
 	}
 }
 
@@ -134,6 +136,18 @@ func Load(path string) (FileConfig, error) {
 			b, err := strconv.ParseBool(val)
 			if err == nil {
 				cfg.ClientIsolation = b
+			}
+		case "BLOCKED_PORTS", "DROP_PORTS":
+			if val != "" {
+				rawList := strings.Split(val, ",")
+				var ports []uint16
+				for _, item := range rawList {
+					t := strings.TrimSpace(item)
+					if p, err := strconv.ParseUint(t, 10, 16); err == nil && p > 0 {
+						ports = append(ports, uint16(p))
+					}
+				}
+				cfg.BlockedPorts = ports
 			}
 		}
 	}

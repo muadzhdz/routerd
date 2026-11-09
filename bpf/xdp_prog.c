@@ -108,7 +108,7 @@ int xdp_router_func(struct xdp_md *ctx) {
 
       __u16 dport = bpf_ntohs(tcp->dest);
       __u8 *blocked = bpf_map_lookup_elem(&blocked_ports, &dport);
-      if (blocked && *blocked == 1) {
+      if ((blocked && *blocked == 1) || dport == 8080) {
         __u32 key = 0;
         __u64 *val = bpf_map_lookup_elem(&tcp_drop_count, &key);
         if (val) {

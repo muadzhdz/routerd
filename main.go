@@ -333,6 +333,7 @@ func main() {
 	eng, err := engine.Start(engine.Config{
 		InterfaceName: finalIface,
 		XDPMode:       engine.XDPModeAuto,
+		BlockedPorts:  fileCfg.BlockedPorts,
 	})
 	if err != nil {
 		log.Fatalf("Failed to start eBPF Engine: %v", err)

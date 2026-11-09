@@ -83,3 +83,23 @@ func TestEngineCloseIdempotent(t *testing.T) {
 		t.Fatal("expected error on BlockedPorts after close, got nil")
 	}
 }
+
+func TestBlockedPortsMethods(t *testing.T) {
+	eng := &Engine{closed: true}
+
+	if err := eng.BlockPort(8080); err == nil {
+		t.Fatal("expected error on closed engine")
+	}
+
+	if err := eng.UnblockPort(8080); err == nil {
+		t.Fatal("expected error on closed engine")
+	}
+
+	if eng.IsPortBlocked(8080) {
+		t.Fatal("expected false on closed engine")
+	}
+
+	if ports := eng.BlockedPorts(); ports != nil {
+		t.Fatalf("expected nil ports on closed engine, got %v", ports)
+	}
+}
